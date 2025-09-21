@@ -1,0 +1,21 @@
+{
+  "name": "landing-page-converter",
+  "version": "1.0.0",
+  "description": "Chrome extension for analyzing landing page conversion optimization",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && copy src\\manifest.json dist\\ && xcopy icons dist\\icons\\ /E /I /Y",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "jspdf": "^2.5.1"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.246",
+    "@types/node": "^20.8.0",
+    "typescript": "^5.0.2",
+    "vite": "^4.4.5",
+    "vite-plugin-web-extension": "^4.1.1"
+  }
+}

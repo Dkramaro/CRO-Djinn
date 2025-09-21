@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CRO Genie</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo-container">
+        <img src="../../icons/CRO-Genie Logo.png" alt="CRO Genie" class="app-logo">
+      </div>
+      <h1>CRO Genie</h1>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+      <!-- Initial State -->
+      <div id="initial-state" class="state-panel">
+        <div class="scan-section">
+          <p class="description">Analyze this page to maximize conversion likelihood for paid traffic campaigns.</p>
+          
+          <!-- Provider Feature Notice -->
+          <div id="provider-notice" class="provider-notice">
+            <div id="gemini-notice" class="feature-notice gemini hidden">
+              <span class="notice-icon">🔍</span>
+              <div class="notice-content">
+                <strong>Enhanced Visual Analysis</strong>
+                <span>Using Gemini with screenshot analysis for comprehensive visual + content insights</span>
+              </div>
+            </div>
+            <div id="openai-notice" class="feature-notice openai hidden">
+              <span class="notice-icon">📝</span>
+              <div class="notice-content">
+                <strong>Advanced Text Analysis</strong>
+                <span>Using OpenAI for deep content strategy insights. <a href="#" id="visual-analysis-link">Visual analysis available with Gemini</a></span>
+              </div>
+            </div>
+          </div>
+
+          <button id="scan-button" class="primary-button">
+            <span class="button-text">Scan Page</span>
+            <span class="loading-spinner hidden"></span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Loading State -->
+      <div id="loading-state" class="state-panel hidden">
+        <div class="loading-container">
+          <div class="loading-spinner"></div>
+          <p id="loading-text">Scraping page...</p>
+        </div>
+      </div>
+
+      <!-- Results State -->
+      <div id="results-state" class="state-panel hidden">
+        <!-- Cache Banner -->
+        <div id="cache-banner" class="cache-banner hidden">
+          <span>📋 Loaded from cache</span>
+          <button id="rerun-cache-button" class="secondary-button small">Re-run</button>
+        </div>
+
+        <!-- Page Meta -->
+        <div class="page-meta">
+          <h2 id="page-title" class="page-title"></h2>
+          <p id="page-url" class="page-url"></p>
+          <div class="meta-row">
+            <span id="timestamp" class="timestamp"></span>
+            <div id="score-pill" class="score-pill">
+              <div id="star-rating" class="star-rating">
+                <span class="star" data-star="1">⭐</span>
+                <span class="star" data-star="2">⭐</span>
+                <span class="star" data-star="3">⭐</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Page Summary -->
+        <section class="section">
+          <h3 class="section-title">📊 Page Overview</h3>
+          <div class="summary-grid">
+            <div class="summary-item">
+              <strong>Business:</strong>
+              <span id="business-type">Analyzing...</span>
+            </div>
+            <div class="summary-item">
+              <strong>Goal:</strong>
+              <span id="conversion-goal">Analyzing...</span>
+            </div>
+            <div class="summary-item">
+              <strong>Audience:</strong>
+              <span id="target-audience">Analyzing...</span>
+            </div>
+          </div>
+          
+          <div class="summary-columns">
+            <div class="summary-list">
+              <h4>✅ Strengths</h4>
+              <ul id="key-strengths" class="bullet-list"></ul>
+            </div>
+            <div class="summary-list">
+              <h4>⚠️ Issues</h4>
+              <ul id="critical-weaknesses" class="bullet-list"></ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- Priority Recommendations -->
+        <section class="section">
+          <h3 class="section-title">🎯 Priority Recommendations</h3>
+          <div id="streamlined-recommendations" class="recommendations-cards"></div>
+        </section>
+
+        <!-- Quick Wins -->
+        <section class="section">
+          <h3 class="section-title">⚡ Quick Wins</h3>
+          <div id="quick-wins" class="quick-wins-cards"></div>
+        </section>
+
+        <!-- Executive Summary -->
+        <section class="section">
+          <h3 class="section-title">📝 Executive Summary</h3>
+          <ul id="executive-summary" class="bullet-list"></ul>
+        </section>
+
+
+        <!-- Copy Suggestions -->
+        <section id="copy-suggestions-section" class="section hidden">
+          <h3 class="section-title">✏️ Copy Suggestions</h3>
+          <div id="copy-suggestions" class="copy-suggestions"></div>
+        </section>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+          <button id="rerun-button" class="secondary-button">Re-run</button>
+          <button id="export-pdf-button" class="secondary-button">Export PDF</button>
+          <button id="options-button" class="secondary-button">Options</button>
+        </div>
+      </div>
+
+      <!-- Error State -->
+      <div id="error-state" class="state-panel hidden">
+        <div class="error-container">
+          <div class="error-icon">⚠️</div>
+          <h3>Analysis Failed</h3>
+          <p id="error-message" class="error-message"></p>
+          <div class="error-actions">
+            <button id="retry-button" class="primary-button">Retry</button>
+            <button id="options-error-button" class="secondary-button">Settings</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p class="disclaimer">AI-powered analysis for conversion optimization insights.</p>
+    </footer>
+  </div>
+
+  <script type="module" src="popup.ts"></script>
+</body>
+</html>
+

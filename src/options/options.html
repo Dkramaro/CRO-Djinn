@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CRO Genie - Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo-container">
+        <img src="../../icons/CRO-Genie Logo.png" alt="CRO Genie" class="app-logo">
+      </div>
+      <h1>CRO Genie</h1>
+      <p class="subtitle">Configure your settings</p>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+      <div class="settings-form">
+        <!-- AI Provider Configuration -->
+        <section class="section">
+          <h2 class="section-title">AI Provider Configuration</h2>
+          <p class="section-description">
+            Choose your AI provider and enter your API key. Keys are stored locally and never shared.
+          </p>
+
+          <div class="form-group">
+            <label for="provider-select" class="form-label">AI Provider *</label>
+            <select id="provider-select" class="form-select">
+              <option value="openai">OpenAI</option>
+              <option value="gemini">Google Gemini</option>
+            </select>
+            <small class="form-help">
+              Select your preferred AI provider for analysis
+            </small>
+          </div>
+
+          <!-- OpenAI Configuration -->
+          <div id="openai-config" class="provider-config">
+            <div class="form-group">
+              <label for="openai-api-key" class="form-label">OpenAI API Key *</label>
+              <input 
+                type="password" 
+                id="openai-api-key" 
+                class="form-input" 
+                placeholder="sk-..." 
+                autocomplete="off"
+              >
+              <small class="form-help">
+                Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a>
+              </small>
+            </div>
+
+            <div class="form-group">
+              <label for="openai-model" class="form-label">OpenAI Model</label>
+              <select id="openai-model" class="form-select">
+                <option value="gpt-5-mini">GPT-5 Mini (Recommended)</option>
+                <option value="gpt-5">GPT-5</option>
+                <option value="gpt-4.1-mini">GPT-4.1 Mini</option>
+                <option value="gpt-4.1">GPT-4.1</option>
+              </select>
+              <small class="form-help">
+                GPT-5 Mini provides the best balance of quality and cost
+              </small>
+            </div>
+          </div>
+
+          <!-- Gemini Configuration -->
+          <div id="gemini-config" class="provider-config hidden">
+            <div class="form-group">
+              <label for="gemini-api-key" class="form-label">Gemini API Key *</label>
+              <input 
+                type="password" 
+                id="gemini-api-key" 
+                class="form-input" 
+                placeholder="AIza..." 
+                autocomplete="off"
+              >
+              <small class="form-help">
+                Get your API key from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>
+              </small>
+            </div>
+
+            <div class="form-group">
+              <label for="gemini-model" class="form-label">Gemini Model</label>
+              <select id="gemini-model" class="form-select">
+                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Recommended)</option>
+                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+              </select>
+              <small class="form-help">
+                Gemini 2.5 Flash provides the best price-performance balance for large scale processing
+              </small>
+            </div>
+          </div>
+        </section>
+
+        <!-- Cache Management -->
+        <section class="section">
+          <h2 class="section-title">Cache Management</h2>
+          <p class="section-description">
+            Manage cached audit results to improve performance and save API costs.
+          </p>
+
+          <div class="cache-info">
+            <div class="info-item">
+              <span class="info-label">Cached Audits:</span>
+              <span id="cache-count" class="info-value">Loading...</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Cache Age:</span>
+              <span class="info-value">7 days maximum</span>
+            </div>
+          </div>
+
+          <button id="clear-cache-button" class="secondary-button">
+            Clear All Cache
+          </button>
+        </section>
+
+        <!-- About -->
+        <section class="section">
+          <h2 class="section-title">About</h2>
+          <p class="section-description">
+            CRO Genie analyzes web pages to maximize conversion likelihood for paid traffic campaigns. 
+            It uses AI to provide actionable recommendations for improving your landing pages.
+          </p>
+          
+          <div class="version-info">
+            <span class="version">Version 1.0.0</span>
+          </div>
+        </section>
+
+        <!-- Save Button -->
+        <div class="form-actions">
+          <button id="save-button" class="primary-button">
+            <span class="button-text">Save Settings</span>
+            <span class="loading-spinner hidden"></span>
+          </button>
+        </div>
+
+        <!-- Status Messages -->
+        <div id="success-message" class="message success-message hidden">
+          <span class="message-icon">✓</span>
+          Settings saved successfully!
+        </div>
+
+        <div id="error-message" class="message error-message hidden">
+          <span class="message-icon">⚠️</span>
+          <span id="error-text">Failed to save settings</span>
+        </div>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p class="disclaimer">
+        This extension is advisory only. Your API keys are stored locally and never transmitted except to your selected AI provider (OpenAI or Google Gemini) for analysis.
+      </p>
+    </footer>
+  </div>
+
+  <script type="module" src="options.ts"></script>
+</body>
+</html>

@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "CRO Genie",
+  "version": "1.0.0",
+  "description": "AI-powered landing page analysis to maximize conversion rates for paid traffic",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "downloads",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "icons": {
+    "16": "icons/CRO-Genie Logo.png",
+    "48": "icons/CRO-Genie Logo.png", 
+    "128": "icons/CRO-Genie Logo.png"
+  },
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_title": "CRO Genie",
+    "default_icon": {
+      "16": "icons/CRO-Genie Logo.png",
+      "48": "icons/CRO-Genie Logo.png",
+      "128": "icons/CRO-Genie Logo.png"
+    }
+  },
+  "options_page": "src/options/options.html",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
