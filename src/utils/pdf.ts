@@ -794,8 +794,72 @@ export class PDFExporter {
   }
 }
 
+// Content optimization for large analysis results
+function optimizeAnalysisForPDF(analysis: LLMAnalysis): LLMAnalysis {
+  const optimized = { ...analysis };
+  
+  // Limit recommendations to prevent oversized PDFs
+  if (optimized.recommendations && optimized.recommendations.length > 10) {
+    optimized.recommendations = optimized.recommendations.slice(0, 10);
+  }
+  
+  // Truncate very long text fields while preserving quality
+  if (optimized.recommendations) {
+    optimized.recommendations = optimized.recommendations.map(rec => ({
+      ...rec,
+      currentState: truncateText(rec.currentState, 500),
+      proposedChange: truncateText(rec.proposedChange, 500),
+      psychologyBehind: truncateText(rec.psychologyBehind, 400),
+      testingApproach: truncateText(rec.testingApproach, 300),
+      implementationDetails: Array.isArray(rec.implementationDetails) 
+        ? rec.implementationDetails.slice(0, 5).map(item => truncateText(item, 100))
+        : rec.implementationDetails
+    }));
+  }
+  
+  // Limit executive summary length
+  if (optimized.executiveSummary && optimized.executiveSummary.length > 8) {
+    optimized.executiveSummary = optimized.executiveSummary.slice(0, 8);
+  }
+  
+  // Limit copy suggestions
+  if (optimized.copySuggestions && optimized.copySuggestions.length > 6) {
+    optimized.copySuggestions = optimized.copySuggestions.slice(0, 6);
+  }
+  
+  return optimized;
+}
+
+function truncateText(text: string | undefined, maxLength: number): string {
+  if (!text || text.length <= maxLength) return text || '';
+  
+  // Find the last complete sentence within the limit
+  const truncated = text.substring(0, maxLength);
+  const lastPeriod = truncated.lastIndexOf('.');
+  const lastSpace = truncated.lastIndexOf(' ');
+  
+  if (lastPeriod > maxLength * 0.8) {
+    return truncated.substring(0, lastPeriod + 1);
+  } else if (lastSpace > maxLength * 0.8) {
+    return truncated.substring(0, lastSpace) + '...';
+  } else {
+    return truncated + '...';
+  }
+}
+
 // Export function for use in popup
 export async function generatePDF(analysis: LLMAnalysis, rawData: RawPageData): Promise<void> {
-  const exporter = new PDFExporter();
-  await exporter.exportAudit(analysis, rawData, Date.now());
+  try {
+    // Optimize content to prevent quota issues
+    const optimizedAnalysis = optimizeAnalysisForPDF(analysis);
+    
+    const exporter = new PDFExporter();
+    await exporter.exportAudit(optimizedAnalysis, rawData, Date.now());
+  } catch (error) {
+    // Enhanced error handling for quota issues
+    if (error instanceof Error && error.message.includes('quota')) {
+      throw new Error('PDF generation failed due to large content size. This happens with very detailed analysis results. Please try again or contact support.');
+    }
+    throw error;
+  }
 }

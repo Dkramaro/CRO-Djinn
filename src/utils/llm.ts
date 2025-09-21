@@ -220,7 +220,22 @@ STAR RATING CRITERIA:
         content = await this.callGeminiAPI(systemMessage, userMessage);
       }
     } else {
-      content = await this.callOpenAIAPI(systemMessage, userMessage);
+      // OpenAI - Check if model supports vision and capture screenshot
+      const modelName = this.settings.openaiModel;
+      const supportsVision = modelName.includes('gpt-4') || modelName.startsWith('gpt-5');
+      
+      if (supportsVision) {
+        try {
+          const screenshot = await ScreenshotCapture.captureActiveTab();
+          const compressedScreenshot = await ScreenshotCapture.compressIfNeeded(screenshot);
+          content = await this.callOpenAIAPIWithImage(systemMessage, userMessage, compressedScreenshot);
+        } catch (screenshotError) {
+          console.warn('Screenshot capture failed, falling back to text-only analysis:', screenshotError);
+          content = await this.callOpenAIAPI(systemMessage, userMessage);
+        }
+      } else {
+        content = await this.callOpenAIAPI(systemMessage, userMessage);
+      }
     }
 
     if (!content) {
@@ -285,6 +300,90 @@ STAR RATING CRITERIA:
       messages: [
         { role: 'system', content: systemMessage },
         { role: 'user', content: userMessage }
+      ]
+    };
+
+    // Configure parameters based on model
+    if (modelName.startsWith('gpt-5')) {
+      // GPT-5 models only support default temperature (1) - don't set custom temperature
+      requestBody.response_format = { type: 'json_object' };
+    } else if (modelName.includes('gpt-4') || modelName.includes('gpt-3.5')) {
+      // GPT-4 and older models support custom temperature
+      requestBody.temperature = 0.3;
+      requestBody.response_format = { type: 'json_object' };
+    } else {
+      // Fallback for any other models
+      requestBody.temperature = 0.3;
+      requestBody.response_format = { type: 'json_object' };
+    }
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenAI API error (${response.status}): ${errorText}`);
+    }
+
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content || '';
+  }
+
+  private async callOpenAIAPIWithImage(systemMessage: string, userMessage: string, screenshot: string): Promise<string> {
+    const modelName = this.settings.openaiModel;
+    const apiKey = this.settings.openaiApiKey;
+
+    // Enhanced prompt for visual analysis (similar to Gemini approach)
+    const visualAnalysisPrompt = `${systemMessage}
+
+ENHANCED VISUAL ANALYSIS CAPABILITIES:
+You now have access to a screenshot of the landing page along with the text content. This enables comprehensive visual + content analysis that provides significantly more value than text-only analysis.
+
+VISUAL ANALYSIS REQUIREMENTS:
+- Analyze visual hierarchy and how the eye flows through the page
+- Assess CTA button prominence, color contrast, and visual weight
+- Evaluate design quality, professional appearance, and trust signals
+- Check mobile responsiveness and touch target sizing
+- Identify visual friction points and design inconsistencies
+- Assess color scheme effectiveness for conversion psychology
+- Analyze spacing, alignment, and overall visual polish
+
+ENHANCED RECOMMENDATIONS:
+- Provide specific visual improvements with design rationale
+- Reference exact visual elements you can see in the screenshot
+- Compare visual hierarchy against conversion best practices
+- Suggest specific color, sizing, and positioning improvements
+- Identify visual trust signals that are missing or weak
+
+${userMessage}
+
+IMPORTANT: Use both the screenshot and text content to provide a comprehensive analysis that combines visual design insights with content strategy recommendations.`;
+
+    const requestBody: any = {
+      model: modelName,
+      messages: [
+        { 
+          role: 'user', 
+          content: [
+            {
+              type: 'text',
+              text: visualAnalysisPrompt
+            },
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:image/png;base64,${screenshot}`,
+                detail: 'high'
+              }
+            }
+          ]
+        }
       ]
     };
 

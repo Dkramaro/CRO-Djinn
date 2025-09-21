@@ -452,10 +452,40 @@ class PopupController {
     if (!this.state.analysis || !this.state.rawData) return;
 
     try {
+      // Show loading state during PDF generation
+      const exportButton = document.getElementById('export-pdf-button') as HTMLButtonElement;
+      if (exportButton) {
+        exportButton.disabled = true;
+        exportButton.textContent = 'Generating PDF...';
+      }
+
       await generatePDF(this.state.analysis, this.state.rawData);
+      
+      // Reset button state on success
+      if (exportButton) {
+        exportButton.disabled = false;
+        exportButton.textContent = 'Export PDF';
+      }
     } catch (error) {
       console.error('PDF export failed:', error);
-      this.showError('Failed to export PDF');
+      
+      // Reset button state
+      const exportButton = document.getElementById('export-pdf-button') as HTMLButtonElement;
+      if (exportButton) {
+        exportButton.disabled = false;
+        exportButton.textContent = 'Export PDF';
+      }
+      
+      // Provide specific error messages for quota issues
+      if (error instanceof Error) {
+        if (error.message.includes('quota') || error.message.includes('large content')) {
+          this.showError('PDF export failed: Analysis too detailed for PDF. The enhanced visual analysis creates very comprehensive reports that may exceed PDF size limits. You can still view all insights in the app.');
+        } else {
+          this.showError(`PDF export failed: ${error.message}`);
+        }
+      } else {
+        this.showError('Failed to export PDF. Please try again.');
+      }
     }
   }
 
@@ -1020,13 +1050,29 @@ class PopupController {
       const settings = await StorageManager.getSettings();
       const geminiNotice = document.getElementById('gemini-notice');
       const openaiNotice = document.getElementById('openai-notice');
+      const openaiTextNotice = document.getElementById('openai-text-notice');
 
       if (settings.provider === 'gemini') {
         geminiNotice?.classList.remove('hidden');
         openaiNotice?.classList.add('hidden');
+        openaiTextNotice?.classList.add('hidden');
       } else {
+        // OpenAI provider
         geminiNotice?.classList.add('hidden');
-        openaiNotice?.classList.remove('hidden');
+        
+        // Check if OpenAI model supports vision
+        const modelName = settings.openaiModel;
+        const supportsVision = modelName.includes('gpt-4') || modelName.startsWith('gpt-5');
+        
+        if (supportsVision) {
+          // Show visual analysis notice for vision-capable models
+          openaiNotice?.classList.remove('hidden');
+          openaiTextNotice?.classList.add('hidden');
+        } else {
+          // Show text-only notice for older models
+          openaiNotice?.classList.add('hidden');
+          openaiTextNotice?.classList.remove('hidden');
+        }
       }
     } catch (error) {
       console.warn('Failed to update provider notice:', error);

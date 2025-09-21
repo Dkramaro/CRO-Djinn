@@ -31,15 +31,103 @@ export class StorageManager {
     rawData: RawPageData, 
     modelName: string
   ): Promise<void> {
-    const key = this.getCacheKey(url);
-    const cachedAudit: CachedAudit = {
-      analysis,
-      rawData,
-      timestamp: Date.now(),
-      modelName
-    };
+    try {
+      const key = this.getCacheKey(url);
+      const cachedAudit: CachedAudit = {
+        analysis: this.optimizeAnalysisForStorage(analysis),
+        rawData: this.optimizeRawDataForStorage(rawData),
+        timestamp: Date.now(),
+        modelName
+      };
+      
+      // Check estimated size before storing
+      const estimatedSize = this.estimateObjectSize(cachedAudit);
+      const maxSize = 1024 * 1024; // 1MB limit per cache entry
+      
+      if (estimatedSize > maxSize) {
+        console.warn(`Cache entry too large (${estimatedSize} bytes), skipping cache for ${url}`);
+        return;
+      }
+      
+      await chrome.storage.local.set({ [key]: cachedAudit });
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('QUOTA_BYTES')) {
+        console.warn('Storage quota exceeded, clearing old cache and retrying');
+        await this.cleanOldCache(24 * 60 * 60 * 1000); // Clean entries older than 1 day
+        // Don't retry to avoid infinite loops - just log the issue
+        console.warn('Cache storage failed due to quota limits');
+      } else {
+        console.error('Failed to save cached audit:', error);
+      }
+    }
+  }
+
+  private static optimizeAnalysisForStorage(analysis: LLMAnalysis): LLMAnalysis {
+    const optimized = { ...analysis };
     
-    await chrome.storage.local.set({ [key]: cachedAudit });
+    // Limit and truncate large fields for storage efficiency
+    if (optimized.recommendations && optimized.recommendations.length > 15) {
+      optimized.recommendations = optimized.recommendations.slice(0, 15);
+    }
+    
+    if (optimized.recommendations) {
+      optimized.recommendations = optimized.recommendations.map(rec => ({
+        ...rec,
+        currentState: this.truncateForStorage(rec.currentState, 800),
+        proposedChange: this.truncateForStorage(rec.proposedChange, 800),
+        psychologyBehind: this.truncateForStorage(rec.psychologyBehind, 600),
+        testingApproach: this.truncateForStorage(rec.testingApproach, 500),
+        implementationDetails: Array.isArray(rec.implementationDetails) 
+          ? rec.implementationDetails.slice(0, 8).map(item => this.truncateForStorage(item, 150))
+          : rec.implementationDetails
+      }));
+    }
+    
+    if (optimized.executiveSummary && optimized.executiveSummary.length > 10) {
+      optimized.executiveSummary = optimized.executiveSummary.slice(0, 10);
+    }
+    
+    return optimized;
+  }
+
+  private static optimizeRawDataForStorage(rawData: RawPageData): RawPageData {
+    const optimized = { ...rawData };
+    
+    // Truncate very large text content to prevent storage bloat
+    if (optimized.fullTextContent && optimized.fullTextContent.length > 50000) {
+      optimized.fullTextContent = optimized.fullTextContent.substring(0, 50000) + '... [truncated for storage]';
+    }
+    
+    if (optimized.fullHTML && optimized.fullHTML.length > 100000) {
+      optimized.fullHTML = optimized.fullHTML.substring(0, 100000) + '... [truncated for storage]';
+    }
+    
+    // Limit structured content arrays
+    if (optimized.structuredContent) {
+      optimized.structuredContent = {
+        ...optimized.structuredContent,
+        headings: optimized.structuredContent.headings?.slice(0, 50) || [],
+        buttons: optimized.structuredContent.buttons?.slice(0, 30) || [],
+        links: optimized.structuredContent.links?.slice(0, 100) || [],
+        forms: optimized.structuredContent.forms?.slice(0, 10) || [],
+        images: optimized.structuredContent.images?.slice(0, 50) || [],
+        lists: optimized.structuredContent.lists?.slice(0, 20) || [],
+        sections: optimized.structuredContent.sections?.slice(0, 30) || []
+      };
+    }
+    
+    return optimized;
+  }
+
+  private static truncateForStorage(text: string | undefined, maxLength: number): string {
+    if (!text || text.length <= maxLength) return text || '';
+    return text.substring(0, maxLength - 3) + '...';
+  }
+
+  private static estimateObjectSize(obj: any): number {
+    // Rough estimation of object size in bytes
+    const jsonString = JSON.stringify(obj);
+    return new Blob([jsonString]).size;
   }
 
   static async clearCache(): Promise<void> {
