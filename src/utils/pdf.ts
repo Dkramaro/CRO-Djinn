@@ -222,15 +222,14 @@ export class PDFExporter {
           this.doc.text(line, valueStartX, this.yPosition);
         }
       });
-      this.yPosition += 14; // Further increased spacing to prevent overlap with reduced horizontal gap
+      this.yPosition += 8; // Reduced spacing to prevent content overflow
     });
     
-    this.yPosition += 7; // Reduced by 15% (8 * 0.85 = 6.8, rounded to 7)
-    
+    this.yPosition += 3; // Minimal spacing
     
     // Industry Context section
     if (pageSummary.industryContext) {
-      this.yPosition += 10;
+      this.yPosition += 5;
       this.addSubsectionHeader('Industry Context');
       this.yPosition += 8;
       
@@ -248,7 +247,7 @@ export class PDFExporter {
     
     // Customer Journey section
     if (pageSummary.currentUserJourney && pageSummary.currentUserJourney.length > 0) {
-      this.yPosition += 10;
+      this.yPosition += 5;
       this.addSubsectionHeader('Customer Journey');
       this.yPosition += 8;
       
@@ -275,7 +274,7 @@ export class PDFExporter {
             this.yPosition += 5;
           }
         });
-        this.yPosition += 8;
+        this.yPosition += 6;
       });
     }
   }
@@ -346,7 +345,7 @@ export class PDFExporter {
       this.doc.setTextColor(...this.colors.success);
       this.doc.setFont('helvetica', 'bold');
       this.doc.setFontSize(14);
-      this.doc.text('✅ Key Strengths', leftCol, this.yPosition + 12);
+      this.doc.text('Key Strengths', leftCol, this.yPosition + 12);
       
       let strengthY = this.yPosition + 28;
       this.doc.setFont('helvetica', 'normal');
@@ -384,7 +383,7 @@ export class PDFExporter {
       this.doc.setTextColor(...this.colors.danger);
       this.doc.setFont('helvetica', 'bold');
       this.doc.setFontSize(14);
-      this.doc.text('⚠️ Critical Issues', rightCol, this.yPosition + 12);
+      this.doc.text('Critical Issues', rightCol, this.yPosition + 12);
       
       let weaknessY = this.yPosition + 28;
       this.doc.setFont('helvetica', 'normal');
