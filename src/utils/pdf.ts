@@ -549,59 +549,59 @@ export class PDFExporter {
   }
 
   private addCopySuggestionsSection(suggestions: any[]): void {
-    // Add extra spacing before copy suggestions to prevent overlap
-    this.yPosition += 20;
+    // Reduced spacing before copy suggestions
+    this.yPosition += 15;
     this.addSectionHeaderProfessional('Copy Suggestions');
     
     suggestions.forEach((suggestion) => {
       // Calculate proper card height with safe text width
-      const safeTextWidth = this.pageWidth - (2 * this.margin) - 25;
+      const safeTextWidth = this.pageWidth - (2 * this.margin) - 20;
       const cardHeight = this.calculateCopySuggestionHeightSafe(suggestion, safeTextWidth);
       
-      this.checkNewPage(cardHeight + 15);
+      this.checkNewPage(cardHeight + 8);
       
-      // Light blue card for copy suggestions with proper boundaries
+      // Light blue card for copy suggestions with compact boundaries
       this.doc.setFillColor(250, 253, 255); // Very light blue
-      this.doc.roundedRect(this.margin - 8, this.yPosition - 6, this.pageWidth - (2 * this.margin) + 16, cardHeight, 5, 5, 'F');
+      this.doc.roundedRect(this.margin - 6, this.yPosition - 3, this.pageWidth - (2 * this.margin) + 12, cardHeight, 4, 4, 'F');
       
       this.doc.setDrawColor(...this.colors.info);
       this.doc.setLineWidth(0.3);
-      this.doc.roundedRect(this.margin - 8, this.yPosition - 6, this.pageWidth - (2 * this.margin) + 16, cardHeight, 5, 5, 'S');
+      this.doc.roundedRect(this.margin - 6, this.yPosition - 3, this.pageWidth - (2 * this.margin) + 12, cardHeight, 4, 4, 'S');
       
       // Store starting position for proper container sizing
       const cardStartY = this.yPosition;
       
-      // Section name with proper wrapping
+      // Section name with compact spacing
       this.doc.setTextColor(...this.colors.info);
       this.doc.setFont('helvetica', 'bold');
       this.doc.setFontSize(10);
-      const maxSectionWidth = this.pageWidth - (2 * this.margin) - 20;
+      const maxSectionWidth = this.pageWidth - (2 * this.margin) - 15;
       const wrappedSection = this.wrapText(suggestion.section, maxSectionWidth);
       
-      let sectionY = this.yPosition + 5;
+      let sectionY = this.yPosition + 3;
       wrappedSection.forEach((line) => {
         this.doc.text(line, this.margin, sectionY);
-        sectionY += 6;
+        sectionY += 5;
       });
-      this.yPosition = sectionY + 7;
+      this.yPosition = sectionY + 4;
       
-      // Suggestion text with proper boundaries
+      // Suggestion text with compact boundaries
       this.doc.setTextColor(...this.colors.text);
       this.doc.setFont('helvetica', 'normal');
       this.doc.setFontSize(9);
       const suggestionText = this.wrapText(suggestion.suggestion, safeTextWidth);
       suggestionText.forEach((line) => {
-        this.doc.text(line, this.margin + 8, this.yPosition);
-        this.yPosition += 5;
+        this.doc.text(line, this.margin + 6, this.yPosition);
+        this.yPosition += 4;
       });
       
-      // Ensure we move past the entire card to prevent overlap
-      const cardEndY = cardStartY + cardHeight + 8; // Reduced margin
-      this.yPosition = Math.max(this.yPosition + 3, cardEndY);
-      this.yPosition += 5; // Reduced spacing between cards
+      // Ensure we move past the entire card with minimal spacing
+      const cardEndY = cardStartY + cardHeight + 4;
+      this.yPosition = Math.max(this.yPosition + 2, cardEndY);
+      this.yPosition += 3; // Minimal spacing between cards
     });
     
-    this.yPosition += 10;
+    this.yPosition += 8;
   }
 
   private addSectionHeaderProfessional(title: string): void {
@@ -787,10 +787,10 @@ export class PDFExporter {
   }
 
   private calculateCopySuggestionHeightSafe(suggestion: any, textWidth: number): number {
-    const sectionLines = this.wrapText(suggestion.section, this.pageWidth - (2 * this.margin) - 20);
+    const sectionLines = this.wrapText(suggestion.section, this.pageWidth - (2 * this.margin) - 15);
     const suggestionLines = this.wrapText(suggestion.suggestion, textWidth);
-    // Reduced padding to minimize blank space
-    return 25 + (sectionLines.length * 6) + (suggestionLines.length * 5);
+    // Significantly reduced padding for compact layout
+    return 16 + (sectionLines.length * 5) + (suggestionLines.length * 4);
   }
 }
 
