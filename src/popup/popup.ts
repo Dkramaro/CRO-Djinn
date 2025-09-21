@@ -493,16 +493,55 @@ class PopupController {
     if (!pageSummary) return;
     
     try {
+      // Core page overview fields
       this.setTextContent('business-type', pageSummary.businessType || 'Not specified');
+      this.setTextContent('page-type', pageSummary.pageType || 'Not specified');
       this.setTextContent('conversion-goal', pageSummary.primaryConversionGoal || 'Not specified');
       this.setTextContent('target-audience', pageSummary.targetAudience || 'Not specified');
+      this.setTextContent('purchase-behavior', this.formatPurchaseBehavior(pageSummary.purchaseBehaviorType) || 'Not specified');
       
-      this.populateList('user-journey', pageSummary.currentUserJourney || []);
+      // Industry context section
+      this.setTextContent('industry-context', pageSummary.industryContext || 'Industry context not provided');
+      
+      // Customer journey
+      this.populateCustomerJourney(pageSummary.currentUserJourney || []);
+      
+      // Strengths and weaknesses
       this.populateList('key-strengths', pageSummary.keyStrengths || []);
       this.populateList('critical-weaknesses', pageSummary.criticalWeaknesses || []);
     } catch (error) {
       console.warn('Error populating page summary:', error);
     }
+  }
+
+  private formatPurchaseBehavior(behaviorType: string): string {
+    if (!behaviorType) return 'Not specified';
+    
+    switch (behaviorType.toLowerCase()) {
+      case 'high-consideration':
+        return 'High Consideration';
+      case 'low-consideration':
+        return 'Low Consideration';
+      case 'impulse':
+        return 'Impulse Purchase';
+      default:
+        return behaviorType.charAt(0).toUpperCase() + behaviorType.slice(1);
+    }
+  }
+
+  private populateCustomerJourney(journeySteps: string[]): void {
+    const container = document.getElementById('customer-journey');
+    if (!container || !journeySteps || journeySteps.length === 0) {
+      this.setTextContent('customer-journey', 'Customer journey analysis not available');
+      return;
+    }
+
+    container.innerHTML = '';
+    journeySteps.forEach(step => {
+      const listItem = document.createElement('li');
+      listItem.textContent = step;
+      container.appendChild(listItem);
+    });
   }
 
   private populateStreamlinedRecommendations(recommendations: any[]): void {

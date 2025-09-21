@@ -60,6 +60,7 @@ export class PDFExporter {
     // Core content sections with sophisticated styling
     if (analysis.pageSummary) {
       this.addPageOverviewSection(analysis.pageSummary);
+      this.addStrengthsWeaknessesSection(analysis.pageSummary);
     }
     
     this.addExecutiveSummarySection(analysis.executiveSummary || []);
@@ -190,9 +191,11 @@ export class PDFExporter {
   private addPageOverviewSection(pageSummary: any): void {
     this.addSectionHeaderProfessional('Page Overview');
     
-    // Business information with proper text wrapping
+    // Comprehensive business information with proper text wrapping
     const details = [
       { label: 'Business Type:', value: pageSummary.businessType || 'Not specified' },
+      { label: 'Page Type:', value: pageSummary.pageType || 'Not specified' },
+      { label: 'Purchase Behavior:', value: this.formatPurchaseBehavior(pageSummary.purchaseBehaviorType) || 'Not specified' },
       { label: 'Conversion Goal:', value: pageSummary.primaryConversionGoal || 'Not specified' },
       { label: 'Target Audience:', value: pageSummary.targetAudience || 'Not specified' }
     ];
@@ -224,96 +227,191 @@ export class PDFExporter {
     
     this.yPosition += 7; // Reduced by 15% (8 * 0.85 = 6.8, rounded to 7)
     
-    // Strengths and Weaknesses in elegant columns with proper spacing
-    if (pageSummary.keyStrengths || pageSummary.criticalWeaknesses) {
-      const safeColumnGap = 20; // Reverted back to original spacing
-      const totalContentWidth = this.pageWidth - (2 * this.margin) - safeColumnGap;
-      const columnWidth = totalContentWidth / 2;
-      const leftCol = this.margin;
-      const rightCol = this.margin + columnWidth + safeColumnGap;
+    
+    // Industry Context section
+    if (pageSummary.industryContext) {
+      this.yPosition += 10;
+      this.addSubsectionHeader('Industry Context');
+      this.yPosition += 8;
       
-      // Calculate heights properly to prevent overlap
-      const strengthsHeight = pageSummary.keyStrengths ? 
-        this.calculateListHeight(pageSummary.keyStrengths, columnWidth - 26) : 0;
-      const weaknessHeight = pageSummary.criticalWeaknesses ? 
-        this.calculateListHeight(pageSummary.criticalWeaknesses, columnWidth - 26) : 0;
-      const maxColumnHeight = Math.max(strengthsHeight, weaknessHeight) + 25; // Extra padding
+      this.doc.setTextColor(...this.colors.text);
+      this.doc.setFont('helvetica', 'normal');
+      this.doc.setFontSize(10);
       
-      // Strengths column with proper boundaries
-      if (pageSummary.keyStrengths && pageSummary.keyStrengths.length > 0) {
-        this.doc.setFillColor(245, 254, 245); // Very light green
-        this.doc.roundedRect(leftCol - 8, this.yPosition - 5, columnWidth + 16, maxColumnHeight, 6, 6, 'F');
+      const maxWidth = this.pageWidth - (2 * this.margin);
+      const contextLines = this.wrapText(pageSummary.industryContext, maxWidth);
+      contextLines.forEach(line => {
+        this.doc.text(line, this.margin, this.yPosition);
+        this.yPosition += 5;
+      });
+    }
+    
+    // Customer Journey section
+    if (pageSummary.currentUserJourney && pageSummary.currentUserJourney.length > 0) {
+      this.yPosition += 10;
+      this.addSubsectionHeader('Customer Journey');
+      this.yPosition += 8;
+      
+      this.doc.setTextColor(...this.colors.text);
+      this.doc.setFont('helvetica', 'normal');
+      this.doc.setFontSize(10);
+      
+      const maxWidth = this.pageWidth - (2 * this.margin) - 10; // Account for numbering
+      pageSummary.currentUserJourney.forEach((step: string, index: number) => {
+        // Add step number
+        this.doc.setTextColor(...this.colors.primary);
+        this.doc.setFont('helvetica', 'bold');
+        this.doc.text(`${index + 1}.`, this.margin, this.yPosition);
         
-        this.doc.setDrawColor(...this.colors.success);
-        this.doc.setLineWidth(0.5);
-        this.doc.roundedRect(leftCol - 8, this.yPosition - 5, columnWidth + 16, maxColumnHeight, 6, 6, 'S');
+        // Add step text
+        this.doc.setTextColor(...this.colors.text);
+        this.doc.setFont('helvetica', 'normal');
         
+        const stepLines = this.wrapText(step, maxWidth);
+        stepLines.forEach((line, lineIndex) => {
+          const xPosition = lineIndex === 0 ? this.margin + 10 : this.margin + 10;
+          this.doc.text(line, xPosition, this.yPosition);
+          if (lineIndex < stepLines.length - 1) {
+            this.yPosition += 5;
+          }
+        });
+        this.yPosition += 8;
+      });
+    }
+  }
+
+  private formatPurchaseBehavior(behaviorType: string): string {
+    if (!behaviorType) return 'Not specified';
+    
+    switch (behaviorType.toLowerCase()) {
+      case 'high-consideration':
+        return 'High Consideration';
+      case 'low-consideration':
+        return 'Low Consideration';
+      case 'impulse':
+        return 'Impulse Purchase';
+      default:
+        return behaviorType.charAt(0).toUpperCase() + behaviorType.slice(1);
+    }
+  }
+
+  private addSubsectionHeader(title: string): void {
+    this.doc.setTextColor(...this.colors.accent);
+    this.doc.setFont('helvetica', 'bold');
+    this.doc.setFontSize(11);
+    this.doc.text(title, this.margin, this.yPosition);
+  }
+
+  private addNewPage(): void {
+    this.doc.addPage();
+    this.yPosition = this.margin; // Reset position to top of new page
+  }
+
+  private addStrengthsWeaknessesSection(pageSummary: any): void {
+    // Start a new page for Strengths & Weaknesses
+    this.addNewPage();
+    this.addSectionHeaderProfessional('Strengths & Weaknesses Analysis');
+    
+    if (!pageSummary.keyStrengths && !pageSummary.criticalWeaknesses) {
+      this.doc.setTextColor(...this.colors.text);
+      this.doc.setFont('helvetica', 'normal');
+      this.doc.setFontSize(11);
+      this.doc.text('No strengths or weaknesses data available', this.margin, this.yPosition);
+      return;
+    }
+
+    // Use full page width for better layout
+    const safeColumnGap = 20;
+    const totalContentWidth = this.pageWidth - (2 * this.margin) - safeColumnGap;
+    const columnWidth = totalContentWidth / 2;
+    const leftCol = this.margin;
+    const rightCol = this.margin + columnWidth + safeColumnGap;
+    
+    // Calculate heights properly to prevent overlap
+    const strengthsHeight = pageSummary.keyStrengths ? 
+      this.calculateListHeight(pageSummary.keyStrengths, columnWidth - 26) : 0;
+    const weaknessHeight = pageSummary.criticalWeaknesses ? 
+      this.calculateListHeight(pageSummary.criticalWeaknesses, columnWidth - 26) : 0;
+    const maxColumnHeight = Math.max(strengthsHeight, weaknessHeight) + 40; // Extra padding for full page
+    
+    // Strengths column with enhanced styling for dedicated page
+    if (pageSummary.keyStrengths && pageSummary.keyStrengths.length > 0) {
+      this.doc.setFillColor(245, 254, 245); // Very light green
+      this.doc.roundedRect(leftCol - 8, this.yPosition - 5, columnWidth + 16, maxColumnHeight, 8, 8, 'F');
+      
+      this.doc.setDrawColor(...this.colors.success);
+      this.doc.setLineWidth(1);
+      this.doc.roundedRect(leftCol - 8, this.yPosition - 5, columnWidth + 16, maxColumnHeight, 8, 8, 'S');
+      
+      this.doc.setTextColor(...this.colors.success);
+      this.doc.setFont('helvetica', 'bold');
+      this.doc.setFontSize(14);
+      this.doc.text('✅ Key Strengths', leftCol, this.yPosition + 12);
+      
+      let strengthY = this.yPosition + 28;
+      this.doc.setFont('helvetica', 'normal');
+      this.doc.setFontSize(10);
+      
+      pageSummary.keyStrengths.forEach((strength: string, index: number) => {
+        // Numbered bullet for better readability
         this.doc.setTextColor(...this.colors.success);
         this.doc.setFont('helvetica', 'bold');
-        this.doc.setFontSize(11);
-        this.doc.text('Key Strengths', leftCol, this.yPosition + 8);
+        this.doc.text(`${index + 1}.`, leftCol + 5, strengthY);
         
-        let strengthY = this.yPosition + 20;
+        // Text content with proper wrapping
+        this.doc.setTextColor(...this.colors.text);
         this.doc.setFont('helvetica', 'normal');
-        this.doc.setFontSize(9);
-        
-        pageSummary.keyStrengths.forEach((strength: string) => {
-          // Colored bullet
-          this.doc.setTextColor(...this.colors.success);
-          this.doc.setFont('helvetica', 'bold');
-          this.doc.text('•', leftCol + 5, strengthY);
-          
-          // Text content with proper wrapping
-          this.doc.setTextColor(...this.colors.text);
-          this.doc.setFont('helvetica', 'normal');
-          const wrappedText = this.wrapText(strength, columnWidth - 26); // Adjusted for reduced spacing
-          wrappedText.forEach((line) => {
-            this.doc.text(line, leftCol + 11, strengthY); // Reduced gap by 35% (15 - 4 = 11)
-            strengthY += 5;
-          });
-          strengthY += 4; // Spacing between items
+        const wrappedText = this.wrapText(strength, columnWidth - 26);
+        wrappedText.forEach((line, lineIndex) => {
+          this.doc.text(line, leftCol + 15, strengthY);
+          if (lineIndex < wrappedText.length - 1) {
+            strengthY += 6;
+          }
         });
-      }
+        strengthY += 12; // More spacing between items for dedicated page
+      });
+    }
+    
+    // Weaknesses column with enhanced styling for dedicated page
+    if (pageSummary.criticalWeaknesses && pageSummary.criticalWeaknesses.length > 0) {
+      this.doc.setFillColor(254, 245, 245); // Very light red
+      this.doc.roundedRect(rightCol - 8, this.yPosition - 5, columnWidth + 16, maxColumnHeight, 8, 8, 'F');
       
-      // Weaknesses column with proper boundaries
-      if (pageSummary.criticalWeaknesses && pageSummary.criticalWeaknesses.length > 0) {
-        this.doc.setFillColor(254, 245, 245); // Very light red
-        this.doc.roundedRect(rightCol - 8, this.yPosition - 5, columnWidth + 16, maxColumnHeight, 6, 6, 'F');
-        
-        this.doc.setDrawColor(...this.colors.danger);
-        this.doc.setLineWidth(0.5);
-        this.doc.roundedRect(rightCol - 8, this.yPosition - 5, columnWidth + 16, maxColumnHeight, 6, 6, 'S');
-        
+      this.doc.setDrawColor(...this.colors.danger);
+      this.doc.setLineWidth(1);
+      this.doc.roundedRect(rightCol - 8, this.yPosition - 5, columnWidth + 16, maxColumnHeight, 8, 8, 'S');
+      
+      this.doc.setTextColor(...this.colors.danger);
+      this.doc.setFont('helvetica', 'bold');
+      this.doc.setFontSize(14);
+      this.doc.text('⚠️ Critical Issues', rightCol, this.yPosition + 12);
+      
+      let weaknessY = this.yPosition + 28;
+      this.doc.setFont('helvetica', 'normal');
+      this.doc.setFontSize(10);
+      
+      pageSummary.criticalWeaknesses.forEach((weakness: string, index: number) => {
+        // Numbered bullet for better readability
         this.doc.setTextColor(...this.colors.danger);
         this.doc.setFont('helvetica', 'bold');
-        this.doc.setFontSize(11);
-        this.doc.text('Critical Issues', rightCol, this.yPosition + 8);
+        this.doc.text(`${index + 1}.`, rightCol + 5, weaknessY);
         
-        let weaknessY = this.yPosition + 20;
+        // Text content with proper wrapping
+        this.doc.setTextColor(...this.colors.text);
         this.doc.setFont('helvetica', 'normal');
-        this.doc.setFontSize(9);
-        
-        pageSummary.criticalWeaknesses.forEach((weakness: string) => {
-          // Colored bullet
-          this.doc.setTextColor(...this.colors.danger);
-          this.doc.setFont('helvetica', 'bold');
-          this.doc.text('•', rightCol + 5, weaknessY);
-          
-          // Text content with proper wrapping
-          this.doc.setTextColor(...this.colors.text);
-          this.doc.setFont('helvetica', 'normal');
-          const wrappedText = this.wrapText(weakness, columnWidth - 26); // Adjusted for reduced spacing
-          wrappedText.forEach((line) => {
-            this.doc.text(line, rightCol + 11, weaknessY); // Reduced gap by 35% (15 - 4 = 11)
-            weaknessY += 5;
-          });
-          weaknessY += 4; // Spacing between items
+        const wrappedText = this.wrapText(weakness, columnWidth - 26);
+        wrappedText.forEach((line, lineIndex) => {
+          this.doc.text(line, rightCol + 15, weaknessY);
+          if (lineIndex < wrappedText.length - 1) {
+            weaknessY += 6;
+          }
         });
-      }
-      
-      // Move past both columns with safe spacing
-      this.yPosition += maxColumnHeight + 15;
+        weaknessY += 12; // More spacing between items for dedicated page
+      });
     }
+    
+    // Move past both columns
+    this.yPosition += maxColumnHeight + 20;
   }
 
   private addExecutiveSummarySection(summary: string[]): void {
@@ -365,19 +463,10 @@ export class PDFExporter {
   }
 
   private addRecommendationsSection(recommendations: any[]): void {
-    const topRecommendations = recommendations.slice(0, 5);
+    // Start a new page for Priority Recommendations
+    this.addNewPage();
     
-    // Check if we need a new page for header + first recommendation together
-    if (topRecommendations.length > 0) {
-      const safeTextWidth = this.pageWidth - (2 * this.margin) - 20;
-      let firstCardHeight = this.calculateRecommendationHeightSafe(topRecommendations[0], safeTextWidth);
-      // Apply the same height reduction for the first card as we do below
-      firstCardHeight = Math.max(firstCardHeight - 25, firstCardHeight * 0.85);
-      const headerHeight = 50; // Height needed for section header
-      
-      // Check if header + first recommendation can fit together
-      this.checkNewPage(headerHeight + firstCardHeight + 30); // Buffer for spacing
-    }
+    const topRecommendations = recommendations.slice(0, 5);
     
     this.addSectionHeaderProfessional('Priority Recommendations');
     
