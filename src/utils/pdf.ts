@@ -467,6 +467,9 @@ export class PDFExporter {
     
     const topRecommendations = recommendations.slice(0, 5);
     
+    // Reduce top spacing by 40% for Priority Recommendations page header
+    this.yPosition -= 10; // Move header up by reducing starting position
+    
     this.addSectionHeaderProfessional('Priority Recommendations');
     
     topRecommendations.forEach((rec, index) => {
@@ -474,15 +477,13 @@ export class PDFExporter {
       const safeTextWidth = this.pageWidth - (2 * this.margin) - 20; // Reduced from 30
       let cardHeight = this.calculateRecommendationHeightSafe(rec, safeTextWidth);
       
-      // For the first recommendation only, reduce height more to prevent cut-off
+      // Handle first recommendation differently to keep it with header
       if (index === 0) {
-        cardHeight = Math.max(cardHeight - 25, cardHeight * 0.85); // Reduce by 25px or 15%, whichever is smaller
-      }
-      
-      // For first recommendation, no need to check page break since we already did above
-      // For subsequent recommendations, check if they need a new page
-      if (index > 0) {
-        this.checkNewPage(cardHeight + 20); // Reduced buffer from 40 to 20
+        // Reduce height by a fixed amount for first recommendation to prevent cut-off
+        cardHeight = Math.max(cardHeight - 40, cardHeight * 0.8); // Reduce by 40px or 20%, whichever is smaller
+        // Don't check page break for first recommendation - keep it with header
+      } else {
+        this.checkNewPage(cardHeight + 25); // Standard buffer for subsequent cards
       }
       
       // Professional card design with optimized boundaries
@@ -533,41 +534,43 @@ export class PDFExporter {
         this.doc.text(rec.timeline.toUpperCase(), this.margin + 78, this.yPosition + 5);
       }
       
-      this.yPosition += 14; // Reduced from 20
+      // Standard internal spacing for all recommendations - only bottom spacing differs for first card
+      
+      this.yPosition += 14; // Standard spacing between badges and content
       
       // Issue section with optimized spacing
       this.doc.setTextColor(...this.colors.danger);
       this.doc.setFont('helvetica', 'bold');
       this.doc.setFontSize(8);
       this.doc.text('ISSUE:', this.margin, this.yPosition);
-      this.yPosition += 8; // Reduced from 10
+      this.yPosition += 8; // Standard spacing after section headers
       
       this.doc.setTextColor(...this.colors.text);
       this.doc.setFont('helvetica', 'normal');
       const issueText = this.wrapText(rec.issue || rec.currentState, safeTextWidth);
       issueText.forEach((line) => {
         this.doc.text(line, this.margin + 6, this.yPosition); // Reduced indent from 8
-        this.yPosition += 4; // Reduced from 5
+        this.yPosition += 4; // Standard line spacing
       });
       
-      this.yPosition += 6; // Reduced from 8
+      this.yPosition += 6; // Standard spacing between sections
       
       // Solution section with optimized spacing
       this.doc.setTextColor(...this.colors.success);
       this.doc.setFont('helvetica', 'bold');
       this.doc.setFontSize(8);
       this.doc.text('SOLUTION:', this.margin, this.yPosition);
-      this.yPosition += 8; // Reduced from 10
+      this.yPosition += 8; // Standard spacing after section headers
       
       this.doc.setTextColor(...this.colors.text);
       this.doc.setFont('helvetica', 'normal');
       const solutionText = this.wrapText(rec.solution || rec.proposedChange, safeTextWidth);
       solutionText.forEach((line) => {
         this.doc.text(line, this.margin + 6, this.yPosition); // Reduced indent from 8
-        this.yPosition += 4; // Reduced from 5
+        this.yPosition += 4; // Standard line spacing
       });
       
-      this.yPosition += 6; // Reduced from 8
+      this.yPosition += 6; // Standard spacing between sections
       
       // How to implement section (if available)
       if (rec.implementation || rec.implementationDetails || rec.how) {
@@ -575,7 +578,7 @@ export class PDFExporter {
         this.doc.setFont('helvetica', 'bold');
         this.doc.setFontSize(9);
         this.doc.text('HOW TO IMPLEMENT:', this.margin, this.yPosition);
-        this.yPosition += 10;
+        this.yPosition += 10; // Standard spacing after section headers
         
         this.doc.setTextColor(...this.colors.text);
         this.doc.setFont('helvetica', 'normal');
@@ -595,19 +598,19 @@ export class PDFExporter {
             const stepText = this.wrapText(step, safeTextWidth - 15);
             stepText.forEach((line) => {
               this.doc.text(line, this.margin + 15, this.yPosition);
-              this.yPosition += 5;
+              this.yPosition += 5; // Standard line spacing
             });
-            this.yPosition += 2;
+            this.yPosition += 2; // Standard spacing between steps
           });
         } else {
           // Handle string implementation
           const implementationText = this.wrapText(implementationData, safeTextWidth);
           implementationText.forEach((line) => {
             this.doc.text(line, this.margin + 8, this.yPosition);
-            this.yPosition += 5;
+            this.yPosition += 5; // Standard line spacing
           });
         }
-        this.yPosition += 8;
+        this.yPosition += 8; // Standard spacing between sections
       }
       
       // Why this works section (if available)
@@ -616,7 +619,7 @@ export class PDFExporter {
         this.doc.setFont('helvetica', 'bold');
         this.doc.setFontSize(8);
         this.doc.text('WHY THIS WORKS:', this.margin, this.yPosition);
-        this.yPosition += 8; // Reduced from 10
+        this.yPosition += 8; // Standard spacing after section headers
         
         this.doc.setTextColor(...this.colors.text);
         this.doc.setFont('helvetica', 'normal');
@@ -624,13 +627,17 @@ export class PDFExporter {
         const psychologyText = this.wrapText(psychologyData, safeTextWidth);
         psychologyText.forEach((line) => {
           this.doc.text(line, this.margin + 6, this.yPosition); // Reduced indent from 8
-          this.yPosition += 4; // Reduced from 5
+          this.yPosition += 4; // Standard line spacing
         });
-        this.yPosition += 6; // Reduced from 8
+        this.yPosition += 6; // Standard spacing after section
       }
       
-      // Add spacing between recommendation cards
-      this.yPosition += 12; // Optimized spacing between cards
+      // Add spacing between recommendation cards - reduce bottom space by 30% for first card
+      if (index === 0) {
+        this.yPosition += Math.floor(12 * 0.7); // 30% reduction for first card bottom spacing
+      } else {
+        this.yPosition += 12; // Standard spacing for other cards
+      }
     });
     
     this.yPosition += 15;
@@ -782,7 +789,7 @@ export class PDFExporter {
 
   private checkNewPage(requiredSpace: number): void {
     // Improved space calculation to prevent purple box cut-offs
-    const bottomMargin = this.margin + 15; // Consistent bottom margin
+    const bottomMargin = this.margin + 25; // Increased bottom margin to prevent cut-offs
     const availableSpace = this.pageHeight - bottomMargin;
     
     // Check if current position plus required space exceeds available space
