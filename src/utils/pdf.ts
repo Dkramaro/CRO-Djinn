@@ -24,6 +24,11 @@ export class PDFExporter {
 
   constructor() {
     this.doc = new jsPDF('portrait', 'mm', 'a4');
+    
+    // Set encoding and font configuration to prevent character spacing issues
+    this.doc.setCharSpace(0); // Ensure no character spacing
+    this.doc.setFont('helvetica', 'normal');
+    
     this.pageWidth = this.doc.internal.pageSize.getWidth();
     this.pageHeight = this.doc.internal.pageSize.getHeight();
     this.margin = 26; // 30% larger margins
@@ -671,11 +676,21 @@ export class PDFExporter {
       this.doc.setFont('helvetica', 'bold');
       this.doc.setFontSize(10);
       const maxSectionWidth = this.pageWidth - (2 * this.margin) - 15;
-      const wrappedSection = this.wrapText(suggestion.section, maxSectionWidth);
+      const cleanSection = this.sanitizeTextForPDF(suggestion.section || '');
+      const wrappedSection = this.wrapText(cleanSection, maxSectionWidth);
       
       let sectionY = this.yPosition + 3;
       wrappedSection.forEach((line) => {
-        this.doc.text(line, this.margin, sectionY);
+        const cleanLine = this.sanitizeTextForPDF(line);
+        // Reset character spacing and font before each text render
+        this.doc.setCharSpace(0);
+        this.doc.setFont('helvetica', 'bold');
+        this.doc.setFontSize(10);
+        
+        // Force proper encoding by converting to ASCII and back
+        const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%[0-9A-F]{2}/g, '');
+        
+        this.doc.text(encodedLine || cleanLine, this.margin, sectionY);
         sectionY += 5;
       });
       this.yPosition = sectionY + 4;
@@ -684,9 +699,21 @@ export class PDFExporter {
       this.doc.setTextColor(...this.colors.text);
       this.doc.setFont('helvetica', 'normal');
       this.doc.setFontSize(9);
-      const suggestionText = this.wrapText(suggestion.suggestion, safeTextWidth);
+      // Additional sanitization for copy suggestions to prevent character spacing issues
+      const cleanSuggestion = this.sanitizeTextForPDF(suggestion.suggestion || '');
+      const suggestionText = this.wrapText(cleanSuggestion, safeTextWidth);
       suggestionText.forEach((line) => {
-        this.doc.text(line, this.margin + 6, this.yPosition);
+        // Ensure line is properly sanitized before rendering
+        const cleanLine = this.sanitizeTextForPDF(line);
+        // Reset character spacing and font before each text render
+        this.doc.setCharSpace(0);
+        this.doc.setFont('helvetica', 'normal');
+        this.doc.setFontSize(9);
+        
+        // Force proper encoding by converting to ASCII and back
+        const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%[0-9A-F]{2}/g, '');
+        
+        this.doc.text(encodedLine || cleanLine, this.margin + 6, this.yPosition);
         this.yPosition += 4;
       });
       
@@ -753,10 +780,13 @@ export class PDFExporter {
   private wrapText(text: string, maxWidth: number): string[] {
     if (!text || text.trim() === '') return [''];
     
+    // Sanitize text to prevent PDF rendering issues
+    const sanitizedText = this.sanitizeTextForPDF(text);
+    
     // Ensure maxWidth is reasonable to prevent layout issues
     const safeMaxWidth = Math.max(maxWidth, 50);
     
-    const words = text.trim().split(' ');
+    const words = sanitizedText.trim().split(' ');
     const lines: string[] = [];
     let currentLine = '';
 
@@ -784,7 +814,51 @@ export class PDFExporter {
       lines.push(currentLine);
     }
     
-    return lines;
+    return lines.length > 0 ? lines : [''];
+  }
+
+  private sanitizeTextForPDF(text: string): string {
+    if (!text) return '';
+    
+    // More aggressive cleaning to prevent character spacing issues
+    let cleanText = text
+      // Remove or replace problematic characters that might cause rendering issues
+      .replace(/[\u200B-\u200F\u2028-\u202F\u205F-\u206F]/g, '') // Remove zero-width and formatting characters
+      .replace(/[\u0000-\u001F]/g, '') // Remove control characters
+      .replace(/[\uFEFF]/g, '') // Remove byte order mark
+      .replace(/\u00A0/g, ' ') // Replace non-breaking space with regular space
+      .replace(/[\u2013\u2014]/g, '-') // Replace em/en dashes with regular dash
+      .replace(/[\u2018\u2019]/g, "'") // Replace smart quotes with regular quotes
+      .replace(/[\u201C\u201D]/g, '"') // Replace smart double quotes
+      .replace(/\u2026/g, '...') // Replace ellipsis character
+      .replace(/[\u00C0-\u017F]/g, (char) => {
+        // Replace accented characters with their base equivalents
+        const charMap: { [key: string]: string } = {
+          'À': 'A', 'Á': 'A', 'Â': 'A', 'Ã': 'A', 'Ä': 'A', 'Å': 'A',
+          'à': 'a', 'á': 'a', 'â': 'a', 'ã': 'a', 'ä': 'a', 'å': 'a',
+          'È': 'E', 'É': 'E', 'Ê': 'E', 'Ë': 'E',
+          'è': 'e', 'é': 'e', 'ê': 'e', 'ë': 'e',
+          'Ì': 'I', 'Í': 'I', 'Î': 'I', 'Ï': 'I',
+          'ì': 'i', 'í': 'i', 'î': 'i', 'ï': 'i',
+          'Ò': 'O', 'Ó': 'O', 'Ô': 'O', 'Õ': 'O', 'Ö': 'O',
+          'ò': 'o', 'ó': 'o', 'ô': 'o', 'õ': 'o', 'ö': 'o',
+          'Ù': 'U', 'Ú': 'U', 'Û': 'U', 'Ü': 'U',
+          'ù': 'u', 'ú': 'u', 'û': 'u', 'ü': 'u',
+          'Ç': 'C', 'ç': 'c', 'Ñ': 'N', 'ñ': 'n'
+        };
+        return charMap[char] || char;
+      })
+      .trim();
+    
+    // Normalize whitespace - replace multiple spaces with single space
+    cleanText = cleanText.replace(/\s+/g, ' ');
+    
+    // Final check - if we still have unusual characters, force ASCII-only
+    if (/[^\x20-\x7E]/.test(cleanText)) {
+      cleanText = cleanText.replace(/[^\x20-\x7E]/g, '');
+    }
+    
+    return cleanText;
   }
 
   private checkNewPage(requiredSpace: number): void {
