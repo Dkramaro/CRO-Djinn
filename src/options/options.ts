@@ -115,10 +115,10 @@ class OptionsController {
       
       // Set models
       if (this.openaiModelSelect) {
-        this.openaiModelSelect.value = settings.openaiModel || 'gpt-5-mini';
+        this.openaiModelSelect.value = settings.openaiModel || 'gpt-5';
       }
       if (this.geminiModelSelect) {
-        this.geminiModelSelect.value = settings.geminiModel || 'gemini-2.5-flash';
+        this.geminiModelSelect.value = settings.geminiModel || 'gemini-2.5-pro';
       }
 
       // Update UI based on provider
@@ -145,8 +145,8 @@ class OptionsController {
         provider,
         openaiApiKey: this.openaiApiKeyInput?.value.trim() || '',
         geminiApiKey: this.geminiApiKeyInput?.value.trim() || '',
-        openaiModel: this.openaiModelSelect?.value || 'gpt-5-mini',
-        geminiModel: this.geminiModelSelect?.value || 'gemini-2.5-flash'
+        openaiModel: this.openaiModelSelect?.value || 'gpt-5',
+        geminiModel: this.geminiModelSelect?.value || 'gemini-2.5-pro'
       };
 
       // Validate current provider's API key
