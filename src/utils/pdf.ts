@@ -35,19 +35,19 @@ export class PDFExporter {
     this.yPosition = this.margin;
     this.lineHeight = 5;
     
-    // Sophisticated color palette for professional documents
+    // Vibrant color palette matching website's purple-to-yellow gradient theme
     this.colors = {
-      primary: [88, 57, 163],       // Deep sophisticated purple
-      secondary: [108, 117, 125],   // Professional gray
-      success: [40, 167, 69],       // Elegant green
-      warning: [255, 193, 7],       // Refined amber
-      danger: [220, 53, 69],        // Subtle red
-      info: [13, 110, 253],         // Professional blue
+      primary: [138, 43, 226],      // Bright vibrant purple (#8A2BE2)
+      secondary: [160, 32, 240],    // Medium purple accent (#A020F0)
+      success: [255, 215, 0],       // Bright yellow-orange (#FFD700)
+      warning: [255, 193, 7],       // Warm amber (#FFC107)
+      danger: [220, 53, 69],        // Professional red
+      info: [138, 43, 226],         // Purple for info elements
       text: [33, 37, 41],           // Rich dark text
-      lightGray: [248, 249, 250],   // Clean background
+      lightGray: [252, 248, 255],   // Very light purple tint
       background: [255, 255, 255],  // Pure white
-      accent: [102, 126, 234],      // Accent blue
-      muted: [134, 142, 150]        // Muted text
+      accent: [255, 215, 0],        // Bright yellow-orange accent
+      muted: [160, 32, 240]         // Purple for muted text
     };
   }
 
@@ -87,13 +87,13 @@ export class PDFExporter {
   }
 
   private addProfessionalHeader(): void {
-    // Clean professional header without any branding
-    this.doc.setFillColor(248, 250, 252); // Very light blue-gray
+    // Vibrant header with purple gradient effect matching website theme
+    this.doc.setFillColor(252, 248, 255); // Very light purple tint
     this.doc.rect(0, 0, this.pageWidth, 40, 'F');
     
-    // Add subtle gradient effect with a darker line at bottom
-    this.doc.setDrawColor(220, 226, 232);
-    this.doc.setLineWidth(0.5);
+    // Add subtle gradient effect with purple accent line at bottom
+    this.doc.setDrawColor(160, 32, 240); // Medium purple
+    this.doc.setLineWidth(1);
     this.doc.line(0, 40, this.pageWidth, 40);
     
     // Main title with sophisticated typography
@@ -112,12 +112,12 @@ export class PDFExporter {
   }
 
   private addPageMetadata(rawData: RawPageData, starRating: 1 | 2 | 3, timestamp: number): void {
-    // Beautiful metadata section with professional styling
-    this.doc.setFillColor(252, 253, 255); // Very light blue
+    // Beautiful metadata section with purple-tinted styling matching website theme
+    this.doc.setFillColor(252, 248, 255); // Very light purple tint
     this.doc.roundedRect(this.margin - 8, this.yPosition - 6, this.pageWidth - (2 * this.margin) + 16, 35, 6, 6, 'F');
     
     // Add subtle border
-    this.doc.setDrawColor(...this.colors.accent);
+    this.doc.setDrawColor(...this.colors.primary);
     this.doc.setLineWidth(0.3);
     this.doc.roundedRect(this.margin - 8, this.yPosition - 6, this.pageWidth - (2 * this.margin) + 16, 35, 6, 6, 'S');
     
@@ -163,17 +163,17 @@ export class PDFExporter {
     const ratingBoxX = this.pageWidth - 55;
     const ratingBoxY = 12; // Fixed position at top of page
     
-    // Professional muted color scheme for rating
+    // Vibrant color scheme for rating matching website theme
     let ratingColor: [number, number, number];
     let ratingLabel: string;
     if (starRating === 3) {
-      ratingColor = [46, 125, 50]; // Professional green
+      ratingColor = [255, 215, 0]; // Bright yellow-orange for excellent
       ratingLabel = 'Excellent';
     } else if (starRating === 2) {
-      ratingColor = [121, 134, 203]; // Muted blue-purple instead of jarring yellow
+      ratingColor = [160, 32, 240]; // Medium purple for good
       ratingLabel = 'Good';
     } else {
-      ratingColor = [156, 39, 176]; // Professional purple instead of red
+      ratingColor = [138, 43, 226]; // Bright purple for needs work
       ratingLabel = 'Needs Work';
     }
     
@@ -206,7 +206,7 @@ export class PDFExporter {
     ];
     
     details.forEach(detail => {
-      this.doc.setTextColor(...this.colors.accent);
+      this.doc.setTextColor(...this.colors.primary);
       this.doc.setFont('helvetica', 'bold');
       this.doc.setFontSize(10);
       this.doc.text(detail.label, this.margin, this.yPosition);
@@ -300,7 +300,7 @@ export class PDFExporter {
   }
 
   private addSubsectionHeader(title: string): void {
-    this.doc.setTextColor(...this.colors.accent);
+    this.doc.setTextColor(...this.colors.primary);
     this.doc.setFont('helvetica', 'bold');
     this.doc.setFontSize(11);
     this.doc.text(title, this.margin, this.yPosition);
@@ -340,7 +340,7 @@ export class PDFExporter {
     
     // Strengths column with enhanced styling for dedicated page
     if (pageSummary.keyStrengths && pageSummary.keyStrengths.length > 0) {
-      this.doc.setFillColor(245, 254, 245); // Very light green
+      this.doc.setFillColor(255, 252, 240); // Very light yellow tint
       this.doc.roundedRect(leftCol - 8, this.yPosition - 5, columnWidth + 16, maxColumnHeight, 8, 8, 'F');
       
       this.doc.setDrawColor(...this.colors.success);
@@ -378,10 +378,10 @@ export class PDFExporter {
     
     // Weaknesses column with enhanced styling for dedicated page
     if (pageSummary.criticalWeaknesses && pageSummary.criticalWeaknesses.length > 0) {
-      this.doc.setFillColor(254, 245, 245); // Very light red
+      this.doc.setFillColor(252, 248, 255); // Very light purple tint
       this.doc.roundedRect(rightCol - 8, this.yPosition - 5, columnWidth + 16, maxColumnHeight, 8, 8, 'F');
       
-      this.doc.setDrawColor(...this.colors.danger);
+      this.doc.setDrawColor(...this.colors.primary);
       this.doc.setLineWidth(1);
       this.doc.roundedRect(rightCol - 8, this.yPosition - 5, columnWidth + 16, maxColumnHeight, 8, 8, 'S');
       
@@ -422,32 +422,26 @@ export class PDFExporter {
     this.addSectionHeaderProfessional('Executive Summary');
     
     summary.forEach((item) => {
-      // Calculate proper item height with safe text width
-      const safeTextWidth = this.pageWidth - (2 * this.margin) - 40; // Increased safety margin
+      // Calculate compact item height with optimized text width
+      const safeTextWidth = this.pageWidth - (2 * this.margin) - 20; // Further reduced since no bullet point
       const itemHeight = this.calculateTextHeight(item, safeTextWidth);
-      const containerHeight = itemHeight + 15; // Extra padding for container
+      const containerHeight = itemHeight + 8; // Reduced padding for container
       
       // Check for page break
-      this.checkNewPage(containerHeight + 10);
+      this.checkNewPage(containerHeight + 5);
       
-      // Beautiful background for each summary item with proper boundaries
-      this.doc.setFillColor(251, 252, 255); // Very light blue
-      this.doc.roundedRect(this.margin - 8, this.yPosition - 5, this.pageWidth - (2 * this.margin) + 16, containerHeight, 4, 4, 'F');
+      // Compact background for each summary item
+      this.doc.setFillColor(252, 248, 255); // Very light purple tint
+      this.doc.roundedRect(this.margin - 6, this.yPosition - 3, this.pageWidth - (2 * this.margin) + 12, containerHeight, 3, 3, 'F');
       
       // Left accent border
-      this.doc.setFillColor(...this.colors.accent);
-      this.doc.rect(this.margin - 8, this.yPosition - 5, 4, containerHeight, 'F');
+      this.doc.setFillColor(...this.colors.primary);
+      this.doc.rect(this.margin - 6, this.yPosition - 3, 3, containerHeight, 'F');
       
       // Store starting Y for content
-      const contentStartY = this.yPosition + 5;
+      const contentStartY = this.yPosition + 3;
       
-      // Bullet point
-      this.doc.setTextColor(...this.colors.accent);
-      this.doc.setFont('helvetica', 'bold');
-      this.doc.setFontSize(10);
-      this.doc.text('•', this.margin + 5, contentStartY);
-      
-      // Content with proper wrapping and positioning
+      // Content with optimized wrapping and positioning (no bullet needed - vertical bar provides visual separation)
       this.doc.setTextColor(...this.colors.text);
       this.doc.setFont('helvetica', 'normal');
       this.doc.setFontSize(10);
@@ -455,15 +449,15 @@ export class PDFExporter {
       
       let textY = contentStartY;
       wrappedText.forEach((line) => {
-        this.doc.text(line, this.margin + 18, textY);
-        textY += 5;
+        this.doc.text(line, this.margin + 8, textY); // Reduced indentation since no bullet
+        textY += 4; // Reduced line spacing
       });
       
-      // Move past container with safe spacing
-      this.yPosition += containerHeight + 8;
+      // Move past container with minimal spacing
+      this.yPosition += containerHeight + 4; // Reduced spacing between items
     });
     
-    this.yPosition += 8;
+    this.yPosition += 5; // Reduced final spacing
   }
 
   private addRecommendationsSection(recommendations: any[]): void {
@@ -492,10 +486,10 @@ export class PDFExporter {
       }
       
       // Professional card design with optimized boundaries
-      this.doc.setFillColor(252, 253, 255); // Very light blue
+      this.doc.setFillColor(252, 248, 255); // Very light purple tint
       this.doc.roundedRect(this.margin - 4, this.yPosition - 4, this.pageWidth - (2 * this.margin) + 8, cardHeight, 5, 5, 'F');
       
-      this.doc.setDrawColor(...this.colors.accent);
+      this.doc.setDrawColor(...this.colors.primary);
       this.doc.setLineWidth(0.3);
       this.doc.roundedRect(this.margin - 4, this.yPosition - 4, this.pageWidth - (2 * this.margin) + 8, cardHeight, 5, 5, 'S');
       
@@ -526,14 +520,14 @@ export class PDFExporter {
       this.doc.text(rec.priority.toUpperCase(), this.margin + 2, this.yPosition + 5);
       
       // Effort badge - more compact
-      this.doc.setFillColor(...this.colors.info);
+      this.doc.setFillColor(...this.colors.secondary);
       this.doc.roundedRect(this.margin + 36, this.yPosition, 36, 8, 2, 2, 'F');
       this.doc.setTextColor(255, 255, 255);
-      this.doc.text(`EFFORT: ${rec.effort}`, this.margin + 38, this.yPosition + 5);
+      this.doc.text(`EFFORT: ${this.getEffortLabel(rec.effort)}`, this.margin + 38, this.yPosition + 5);
       
       // Timeline badge - more compact
       if (rec.timeline) {
-        this.doc.setFillColor(...this.colors.muted);
+        this.doc.setFillColor(...this.colors.primary);
         this.doc.roundedRect(this.margin + 76, this.yPosition, 40, 8, 2, 2, 'F');
         this.doc.setTextColor(255, 255, 255);
         this.doc.text(rec.timeline.toUpperCase(), this.margin + 78, this.yPosition + 5);
@@ -544,7 +538,7 @@ export class PDFExporter {
       this.yPosition += 14; // Standard spacing between badges and content
       
       // Issue section with optimized spacing
-      this.doc.setTextColor(...this.colors.danger);
+      this.doc.setTextColor(...this.colors.primary);
       this.doc.setFont('helvetica', 'bold');
       this.doc.setFontSize(8);
       this.doc.text('ISSUE:', this.margin, this.yPosition);
@@ -579,7 +573,7 @@ export class PDFExporter {
       
       // How to implement section (if available)
       if (rec.implementation || rec.implementationDetails || rec.how) {
-        this.doc.setTextColor(...this.colors.info);
+        this.doc.setTextColor(...this.colors.secondary);
         this.doc.setFont('helvetica', 'bold');
         this.doc.setFontSize(9);
         this.doc.text('HOW TO IMPLEMENT:', this.margin, this.yPosition);
@@ -593,7 +587,7 @@ export class PDFExporter {
           // Handle array of implementation steps
           implementationData.forEach((step) => {
             // Bullet point
-            this.doc.setTextColor(...this.colors.info);
+            this.doc.setTextColor(...this.colors.secondary);
             this.doc.setFont('helvetica', 'bold');
             this.doc.text('-', this.margin + 8, this.yPosition);
             
@@ -620,7 +614,7 @@ export class PDFExporter {
       
       // Why this works section (if available)
       if (rec.psychologyBehind || rec.psychology || rec.why) {
-        this.doc.setTextColor(...this.colors.accent);
+        this.doc.setTextColor(...this.colors.primary);
         this.doc.setFont('helvetica', 'bold');
         this.doc.setFontSize(8);
         this.doc.text('WHY THIS WORKS:', this.margin, this.yPosition);
@@ -649,87 +643,86 @@ export class PDFExporter {
   }
 
   private addCopySuggestionsSection(suggestions: any[]): void {
-    // Reduced spacing before copy suggestions
-    this.yPosition += 15;
+    // Minimal spacing before copy suggestions
+    this.yPosition += 8;
     this.addSectionHeaderProfessional('Copy Suggestions');
     
     suggestions.forEach((suggestion) => {
-      // Calculate proper card height with safe text width
-      const safeTextWidth = this.pageWidth - (2 * this.margin) - 20;
-      const cardHeight = this.calculateCopySuggestionHeightSafe(suggestion, safeTextWidth);
+      // Calculate ultra-compact card height
+      const safeTextWidth = this.pageWidth - (2 * this.margin) - 15;
+      const cardHeight = this.calculateCopySuggestionHeightUltraCompact(suggestion, safeTextWidth);
       
-      this.checkNewPage(cardHeight + 8);
+      this.checkNewPage(cardHeight + 5);
       
-      // Light blue card for copy suggestions with compact boundaries
-      this.doc.setFillColor(250, 253, 255); // Very light blue
-      this.doc.roundedRect(this.margin - 6, this.yPosition - 3, this.pageWidth - (2 * this.margin) + 12, cardHeight, 4, 4, 'F');
+      // Ultra-compact purple card for copy suggestions
+      this.doc.setFillColor(252, 248, 255); // Very light purple tint
+      this.doc.roundedRect(this.margin - 4, this.yPosition - 2, this.pageWidth - (2 * this.margin) + 8, cardHeight, 3, 3, 'F');
       
-      this.doc.setDrawColor(...this.colors.info);
-      this.doc.setLineWidth(0.3);
-      this.doc.roundedRect(this.margin - 6, this.yPosition - 3, this.pageWidth - (2 * this.margin) + 12, cardHeight, 4, 4, 'S');
+      this.doc.setDrawColor(...this.colors.secondary);
+      this.doc.setLineWidth(0.2);
+      this.doc.roundedRect(this.margin - 4, this.yPosition - 2, this.pageWidth - (2 * this.margin) + 8, cardHeight, 3, 3, 'S');
       
       // Store starting position for proper container sizing
       const cardStartY = this.yPosition;
       
-      // Section name with compact spacing
-      this.doc.setTextColor(...this.colors.info);
+      // Section name with ultra-compact spacing
+      this.doc.setTextColor(...this.colors.secondary);
       this.doc.setFont('helvetica', 'bold');
-      this.doc.setFontSize(10);
-      const maxSectionWidth = this.pageWidth - (2 * this.margin) - 15;
+      this.doc.setFontSize(9);
+      const maxSectionWidth = this.pageWidth - (2 * this.margin) - 10;
       const cleanSection = this.sanitizeTextForPDF(suggestion.section || '');
       const wrappedSection = this.wrapText(cleanSection, maxSectionWidth);
       
-      let sectionY = this.yPosition + 3;
+      let sectionY = this.yPosition + 2;
       wrappedSection.forEach((line) => {
         const cleanLine = this.sanitizeTextForPDF(line);
-        // Reset character spacing and font before each text render
         this.doc.setCharSpace(0);
         this.doc.setFont('helvetica', 'bold');
-        this.doc.setFontSize(10);
+        this.doc.setFontSize(9);
         
-        // Force proper encoding by converting to ASCII and back
         const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%[0-9A-F]{2}/g, '');
-        
         this.doc.text(encodedLine || cleanLine, this.margin, sectionY);
-        sectionY += 5;
+        sectionY += 4;
       });
-      this.yPosition = sectionY + 4;
+      this.yPosition = sectionY + 2;
       
-      // Suggestion text with compact boundaries
+      // Suggestion text with ultra-compact spacing
       this.doc.setTextColor(...this.colors.text);
       this.doc.setFont('helvetica', 'normal');
-      this.doc.setFontSize(9);
-      // Additional sanitization for copy suggestions to prevent character spacing issues
+      this.doc.setFontSize(8);
       const cleanSuggestion = this.sanitizeTextForPDF(suggestion.suggestion || '');
       const suggestionText = this.wrapText(cleanSuggestion, safeTextWidth);
       suggestionText.forEach((line) => {
-        // Ensure line is properly sanitized before rendering
         const cleanLine = this.sanitizeTextForPDF(line);
-        // Reset character spacing and font before each text render
         this.doc.setCharSpace(0);
         this.doc.setFont('helvetica', 'normal');
-        this.doc.setFontSize(9);
+        this.doc.setFontSize(8);
         
-        // Force proper encoding by converting to ASCII and back
         const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%[0-9A-F]{2}/g, '');
-        
-        this.doc.text(encodedLine || cleanLine, this.margin + 6, this.yPosition);
-        this.yPosition += 4;
+        this.doc.text(encodedLine || cleanLine, this.margin + 4, this.yPosition);
+        this.yPosition += 3;
       });
       
-      // Ensure we move past the entire card with minimal spacing
-      const cardEndY = cardStartY + cardHeight + 4;
-      this.yPosition = Math.max(this.yPosition + 2, cardEndY);
-      this.yPosition += 3; // Minimal spacing between cards
+      // Ultra-minimal spacing between cards
+      const cardEndY = cardStartY + cardHeight + 1;
+      this.yPosition = Math.max(this.yPosition + 1, cardEndY);
+      this.yPosition += 2; // Minimal spacing between cards
     });
     
-    this.yPosition += 8;
+    this.yPosition += 5;
   }
 
   private addSectionHeaderProfessional(title: string): void {
     this.checkNewPage(50);
     
-    this.yPosition += 15;
+    // Reduce spacing for specific sections
+    if (title === 'Copy Suggestions') {
+      this.yPosition += 8;
+    } else if (title === 'Executive Summary') {
+      this.yPosition += 10; // Reduced spacing for Executive Summary
+    } else {
+      this.yPosition += 15;
+    }
     
     // Professional section header
     this.doc.setFillColor(...this.colors.primary);
@@ -745,8 +738,24 @@ export class PDFExporter {
   }
 
   private addProfessionalFooter(timestamp: number): void {
-    // Add some space before footer
-    this.yPosition += 20;
+    // Calculate footer height to position it at bottom of page
+    const footerText = 'This audit provides actionable insights for improving landing page conversion rates. ' +
+                      'Recommendations are based on conversion optimization best practices and user experience principles.';
+    const wrappedFooter = this.wrapText(footerText, this.pageWidth - (2 * this.margin));
+    const footerHeight = (wrappedFooter.length * 4) + 15 + 10; // Text lines + spacing + separator + timestamp
+    
+    // Check if we need a new page for the footer
+    const bottomMargin = this.margin + 10;
+    const availableSpace = this.pageHeight - bottomMargin;
+    
+    if (this.yPosition + footerHeight > availableSpace) {
+      this.doc.addPage();
+      this.yPosition = this.margin;
+    }
+    
+    // Position footer at bottom of page with proper spacing
+    const targetFooterY = this.pageHeight - this.margin - footerHeight;
+    this.yPosition = Math.max(this.yPosition, targetFooterY);
     
     // Professional separator line
     this.doc.setDrawColor(...this.colors.secondary);
@@ -755,13 +764,10 @@ export class PDFExporter {
     this.yPosition += 10;
     
     // Footer content with professional styling
-    this.doc.setTextColor(...this.colors.muted);
+    this.doc.setTextColor(...this.colors.text);
     this.doc.setFont('helvetica', 'normal');
     this.doc.setFontSize(8);
     
-    const footerText = 'This audit provides actionable insights for improving landing page conversion rates. ' +
-                      'Recommendations are based on conversion optimization best practices and user experience principles.';
-    const wrappedFooter = this.wrapText(footerText, this.pageWidth - (2 * this.margin));
     wrappedFooter.forEach((line) => {
       this.doc.text(line, this.margin, this.yPosition);
       this.yPosition += 4;
@@ -875,11 +881,24 @@ export class PDFExporter {
 
   private getPriorityColor(priority: string): [number, number, number] {
     switch (priority) {
-      case 'critical': return this.colors.danger;
-      case 'high': return this.colors.warning;
-      case 'medium': return this.colors.info;
-      case 'low': return this.colors.success;
-      default: return this.colors.secondary;
+      case 'critical': return this.colors.primary; // Bright purple for critical
+      case 'high': return this.colors.warning; // Warm amber for high
+      case 'medium': return this.colors.secondary; // Medium purple for medium
+      case 'low': return this.colors.success; // Bright yellow-orange for low
+      default: return this.colors.muted; // Purple for default
+    }
+  }
+
+  private getEffortLabel(effort: string | number): string {
+    const effortStr = String(effort).toLowerCase();
+    switch (effortStr) {
+      case '3': return 'High';
+      case '2': return 'Medium';
+      case '1': return 'Low';
+      case 'high': return 'High';
+      case 'medium': return 'Medium';
+      case 'low': return 'Low';
+      default: return String(effort);
     }
   }
 
@@ -960,6 +979,13 @@ export class PDFExporter {
     const suggestionLines = this.wrapText(suggestion.suggestion, textWidth);
     // Significantly reduced padding for compact layout
     return 16 + (sectionLines.length * 5) + (suggestionLines.length * 4);
+  }
+
+  private calculateCopySuggestionHeightUltraCompact(suggestion: any, textWidth: number): number {
+    const sectionLines = this.wrapText(suggestion.section, this.pageWidth - (2 * this.margin) - 10);
+    const suggestionLines = this.wrapText(suggestion.suggestion, textWidth);
+    // Ultra-compact padding for maximum space efficiency
+    return 8 + (sectionLines.length * 4) + (suggestionLines.length * 3);
   }
 }
 
