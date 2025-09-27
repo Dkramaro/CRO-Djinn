@@ -74,7 +74,15 @@ export class PDFExporter {
       this.addRecommendationsSection(analysis.recommendations);
     }
     
-    // Quick Wins section removed as requested
+    // Quick Wins section
+    if (analysis.quickWins && analysis.quickWins.length > 0) {
+      this.addQuickWinsSection(analysis.quickWins);
+    }
+    
+    // Visual CRO Analysis section
+    if (analysis.visualCROAnalysis) {
+      this.addVisualCROAnalysisSection(analysis.visualCROAnalysis);
+    }
     
     if (analysis.copySuggestions && analysis.copySuggestions.length > 0) {
       this.addCopySuggestionsSection(analysis.copySuggestions);
@@ -712,11 +720,366 @@ export class PDFExporter {
     this.yPosition += 5;
   }
 
+  private addQuickWinsSection(quickWins: any[]): void {
+    // Start a new page for Quick Wins
+    this.addNewPage();
+    
+    // Modern header with gradient-like effect
+    this.yPosition += 2;
+    this.addSectionHeaderProfessional('Quick Wins');
+    
+    quickWins.forEach((win, index) => {
+      // Calculate text width for content
+      const safeTextWidth = this.pageWidth - (2 * this.margin) - 20;
+      
+      // Store starting position for dynamic height calculation
+      const cardStartY = this.yPosition;
+      
+      // First, calculate the height by simulating content placement
+      const tempY = this.yPosition;
+      let calculatedHeight = 3; // Top padding
+      
+      // Calculate title height
+      const cleanTitle = this.sanitizeTextForPDF(win.title || '');
+      const wrappedTitle = this.wrapText(cleanTitle, safeTextWidth - 10);
+      calculatedHeight += (wrappedTitle.length * 5) + 2;
+      
+      // Calculate description height
+      if (win.description) {
+        const cleanDescription = this.sanitizeTextForPDF(win.description);
+        const descriptionLines = this.wrapText(cleanDescription, safeTextWidth - 10);
+        calculatedHeight += (descriptionLines.length * 4) + 2;
+      }
+      
+      // Calculate rationale height
+      if (win.rationale) {
+        const cleanRationale = this.sanitizeTextForPDF(win.rationale);
+        const rationaleLines = this.wrapText(cleanRationale, safeTextWidth - 10);
+        calculatedHeight += 4 + (rationaleLines.length * 3) + 2;
+      }
+      
+      calculatedHeight += 1; // Bottom buffer
+      
+      // Draw container first with calculated height
+      this.doc.setFillColor(255, 255, 255);
+      this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'F');
+      
+      this.doc.setDrawColor(220, 220, 220);
+      this.doc.setLineWidth(0.3);
+      this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'S');
+      
+      // Purple vertical accent bar on the left (like executive summary)
+      this.doc.setFillColor(...this.colors.primary);
+      this.doc.roundedRect(this.margin - 2, this.yPosition - 1, 4, calculatedHeight, 0, 0, 'F');
+      
+      // Now add text content on top of the container
+      // Clean title with underline (positioned after purple bar)
+      this.doc.setTextColor(...this.colors.primary); // Purple text for theme
+      this.doc.setFont('helvetica', 'bold');
+      this.doc.setFontSize(11);
+      
+      let titleY = this.yPosition + 3;
+      wrappedTitle.forEach((line) => {
+        const cleanLine = this.sanitizeTextForPDF(line);
+        this.doc.setCharSpace(0);
+        this.doc.setFont('helvetica', 'bold');
+        this.doc.setFontSize(11);
+        this.doc.setTextColor(...this.colors.primary); // Ensure purple text
+        
+        const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%[0-9A-F]{2}/g, '');
+        this.doc.text(encodedLine || cleanLine, this.margin + 6, titleY, { underline: true });
+        titleY += 5;
+      });
+      
+      // Clean metadata in top right - effort and timeline
+      this.doc.setTextColor(120, 120, 120); // Light gray text for subtle appearance
+      this.doc.setFont('helvetica', 'normal');
+      this.doc.setFontSize(8);
+      
+      const effortLabel = this.getEffortLabel(win.effort);
+      let metadataText = `Effort: ${effortLabel}`;
+      if (win.timeline) {
+        metadataText += ` • Timeline: ${win.timeline}`;
+      }
+      
+      // Position metadata in top right
+      const metadataX = this.pageWidth - this.margin - 2;
+      this.doc.text(metadataText, metadataX, this.yPosition + 3, { align: 'right' });
+      
+      this.yPosition = titleY + 2;
+      
+      // Clean description (positioned after purple bar)
+      if (win.description) {
+        this.doc.setTextColor(0, 0, 0); // Black text for visibility
+        this.doc.setFont('helvetica', 'normal');
+        this.doc.setFontSize(10);
+        const cleanDescription = this.sanitizeTextForPDF(win.description);
+        const descriptionLines = this.wrapText(cleanDescription, safeTextWidth - 10);
+        descriptionLines.forEach((line, lineIndex) => {
+          const cleanLine = this.sanitizeTextForPDF(line);
+          this.doc.setCharSpace(0);
+          this.doc.setFont('helvetica', 'normal');
+          this.doc.setFontSize(10);
+          this.doc.setTextColor(0, 0, 0); // Ensure black text
+          
+          const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%[0-9A-F]{2}/g, '');
+          const bulletPoint = lineIndex === 0 ? '• ' : '  ';
+          this.doc.text(bulletPoint + (encodedLine || cleanLine), this.margin + 6, this.yPosition);
+          this.yPosition += 4;
+        });
+        this.yPosition += 2;
+      }
+      
+      // Clean rationale section (positioned after purple bar)
+      if (win.rationale) {
+        this.doc.setTextColor(...this.colors.primary); // Purple text for "Why:" label
+        this.doc.setFont('helvetica', 'bold');
+        this.doc.setFontSize(9);
+        this.doc.text('Why:', this.margin + 6, this.yPosition);
+        this.yPosition += 4;
+        
+        this.doc.setTextColor(0, 0, 0); // Black text for rationale content
+        this.doc.setFont('helvetica', 'normal');
+        this.doc.setFontSize(9);
+        const cleanRationale = this.sanitizeTextForPDF(win.rationale);
+        const rationaleLines = this.wrapText(cleanRationale, safeTextWidth - 10);
+        rationaleLines.forEach((line) => {
+          const cleanLine = this.sanitizeTextForPDF(line);
+          this.doc.setCharSpace(0);
+          this.doc.setFont('helvetica', 'normal');
+          this.doc.setFontSize(9);
+          this.doc.setTextColor(0, 0, 0); // Ensure black text for content
+          
+          const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%[0-9A-F]{2}/g, '');
+          this.doc.text(encodedLine || cleanLine, this.margin + 8, this.yPosition);
+          this.yPosition += 3;
+        });
+        this.yPosition += 2;
+      }
+      
+      // Move to next card position
+      this.yPosition = cardStartY + calculatedHeight + 5; // Spacing between cards
+    });
+    
+    this.yPosition += 5;
+  }
+
+  private addVisualCROAnalysisSection(visualAnalysis: any): void {
+    // Start a new page for Visual CRO Analysis
+    this.addNewPage();
+    
+    // Modern header
+    this.yPosition += 2;
+    this.addSectionHeaderProfessional('Visual CRO Analysis');
+    
+    // Create array of sections to process
+    const sections = [];
+    if (visualAnalysis.visualFlow) {
+      sections.push({ title: 'Visual Flow Analysis', data: visualAnalysis.visualFlow });
+    }
+    if (visualAnalysis.colorContrast) {
+      sections.push({ title: 'Color & Contrast Evaluation', data: visualAnalysis.colorContrast });
+    }
+    if (visualAnalysis.criticalIssue) {
+      sections.push({ title: 'Critical Visual Issue', data: visualAnalysis.criticalIssue });
+    }
+    
+    // Process each section with modern card design
+    sections.forEach((section, index) => {
+      this.addModernVisualAnalysisCard(section.title, section.data, index);
+    });
+    
+    this.yPosition += 5;
+  }
+
+  private addModernVisualAnalysisCard(title: string, data: any, index: number): void {
+    // Calculate text width for content
+    const safeTextWidth = this.pageWidth - (2 * this.margin) - 20;
+    
+    // Store starting position for dynamic height calculation
+    const cardStartY = this.yPosition;
+    
+    // Define colors for different sections
+    const sectionColors = [
+      { bg: [240, 248, 255], border: [100, 149, 237], accent: [100, 149, 237] }, // Blue for Visual Flow
+      { bg: [240, 255, 240], border: [34, 139, 34], accent: [34, 139, 34] },     // Green for Color & Contrast
+      { bg: [255, 240, 240], border: [220, 20, 60], accent: [220, 20, 60] }      // Red for Critical Issue
+    ];
+    
+    const colors = sectionColors[index % sectionColors.length];
+    
+    // First, calculate the height by simulating content placement
+    let calculatedHeight = 8; // Top padding for header
+    
+    // Calculate title height
+    const cleanTitle = this.sanitizeTextForPDF(title);
+    const wrappedTitle = this.wrapText(cleanTitle, safeTextWidth - 20);
+    calculatedHeight += (wrappedTitle.length * 6) + 4;
+    
+    // Calculate content height
+    Object.entries(data).forEach(([key, value]) => {
+      if (value && typeof value === 'string') {
+        // Skip Urgency field for Critical Visual Issue (redundant)
+        if (key.toLowerCase() === 'urgency' && title.toLowerCase().includes('critical')) {
+          return;
+        }
+        
+        const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+        const cleanValue = this.sanitizeTextForPDF(String(value));
+        
+        // Special height calculation for Visual Flow Analysis
+        if (key.toLowerCase() === 'eyeflowpath' || key.toLowerCase() === 'eyeflow') {
+          const flowItems = cleanValue.split(/\s+/).filter(item => item.length > 0);
+          const formattedFlow = flowItems.join(' -> ');
+          const valueLines = this.wrapText(formattedFlow, safeTextWidth - 20);
+          calculatedHeight += 4 + (valueLines.length * 4) + 3; // Restored normal spacing
+        } else {
+          const valueLines = this.wrapText(cleanValue, safeTextWidth - 20);
+          calculatedHeight += 4 + (valueLines.length * 4) + 3; // Restored normal spacing
+        }
+      }
+    });
+    
+    calculatedHeight += 8; // Bottom padding
+    
+    // Draw container with colored background
+    this.doc.setFillColor(...colors.bg);
+    this.doc.roundedRect(this.margin - 3, this.yPosition - 2, this.pageWidth - (2 * this.margin) + 6, calculatedHeight, 4, 4, 'F');
+    
+    // Colored border
+    this.doc.setDrawColor(...colors.border);
+    this.doc.setLineWidth(0.5);
+    this.doc.roundedRect(this.margin - 3, this.yPosition - 2, this.pageWidth - (2 * this.margin) + 6, calculatedHeight, 4, 4, 'S');
+    
+    // Colored header bar
+    this.doc.setFillColor(...colors.accent);
+    this.doc.roundedRect(this.margin - 3, this.yPosition - 2, this.pageWidth - (2 * this.margin) + 6, 8, 4, 4, 'F');
+    
+    // Now add text content on top of the container
+    // Section title in white on colored header
+    this.doc.setTextColor(255, 255, 255); // White text on colored header
+    this.doc.setFont('helvetica', 'bold');
+    this.doc.setFontSize(11);
+    
+    let titleY = this.yPosition + 2;
+    wrappedTitle.forEach((line) => {
+      const cleanLine = this.sanitizeTextForPDF(line);
+      this.doc.setCharSpace(0);
+      this.doc.setFont('helvetica', 'bold');
+      this.doc.setFontSize(11);
+      this.doc.setTextColor(255, 255, 255); // Ensure white text
+      
+      const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%[0-9A-F]{2}/g, '');
+      this.doc.text(encodedLine || cleanLine, this.margin, titleY);
+      titleY += 6;
+    });
+    
+    this.yPosition = cardStartY + 8 + (wrappedTitle.length * 6) + 3; // Reduced spacing between header and content
+    
+    // Process data fields with better styling and custom ordering for Critical Visual Issue
+    const entries = Object.entries(data);
+    
+    // Custom ordering for Critical Visual Issue: Problem, Solution, Impact
+    let orderedEntries = entries;
+    if (title.toLowerCase().includes('critical')) {
+      const fieldOrder = ['problem', 'solution', 'impact'];
+      orderedEntries = [];
+      
+      // Add fields in specified order
+      fieldOrder.forEach(fieldName => {
+        const found = entries.find(([key]) => key.toLowerCase() === fieldName);
+        if (found) orderedEntries.push(found);
+      });
+      
+      // Add any remaining fields not in the order
+      entries.forEach(([key, value]) => {
+        if (!fieldOrder.includes(key.toLowerCase()) && key.toLowerCase() !== 'urgency') {
+          orderedEntries.push([key, value]);
+        }
+      });
+    }
+    
+    orderedEntries.forEach(([key, value]) => {
+      if (value && typeof value === 'string') {
+        // Skip Urgency field for Critical Visual Issue (redundant)
+        if (key.toLowerCase() === 'urgency' && title.toLowerCase().includes('critical')) {
+          return;
+        }
+        
+        // Format key as label
+        const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+        const cleanLabel = this.sanitizeTextForPDF(label);
+        const cleanValue = this.sanitizeTextForPDF(String(value));
+        
+        // Special formatting for Visual Flow Analysis
+        if (key.toLowerCase() === 'eyeflowpath' || key.toLowerCase() === 'eyeflow') {
+          // Format as flow with ASCII arrows (PDF compatible)
+          const flowItems = cleanValue.split(/\s+/).filter(item => item.length > 0);
+          const formattedFlow = flowItems.join(' -> ');
+          
+          // Add label in accent color
+          this.doc.setTextColor(...colors.accent);
+          this.doc.setFont('helvetica', 'bold');
+          this.doc.setFontSize(10);
+          this.doc.text(`${cleanLabel}:`, this.margin, this.yPosition);
+          this.yPosition += 4; // Restored normal spacing
+          
+          // Add formatted flow in dark gray
+          this.doc.setTextColor(40, 40, 40);
+          this.doc.setFont('helvetica', 'normal');
+          this.doc.setFontSize(9);
+          const flowLines = this.wrapText(formattedFlow, safeTextWidth - 20);
+          flowLines.forEach((line) => {
+            const cleanLine = this.sanitizeTextForPDF(line);
+            this.doc.setCharSpace(0);
+            this.doc.setFont('helvetica', 'normal');
+            this.doc.setFontSize(9);
+            this.doc.setTextColor(40, 40, 40);
+            
+            // Use ASCII arrows that work in PDF
+            this.doc.text(cleanLine, this.margin + 2, this.yPosition);
+            this.yPosition += 4; // Restored normal line spacing
+          });
+          this.yPosition += 3; // Restored normal spacing after
+        } else {
+          // Regular formatting for other fields with normal spacing
+          // Add label in accent color
+          this.doc.setTextColor(...colors.accent);
+          this.doc.setFont('helvetica', 'bold');
+          this.doc.setFontSize(10);
+          this.doc.text(`${cleanLabel}:`, this.margin, this.yPosition);
+          this.yPosition += 4; // Normal spacing
+          
+          // Add value with wrapping in dark gray for better readability
+          this.doc.setTextColor(40, 40, 40);
+          this.doc.setFont('helvetica', 'normal');
+          this.doc.setFontSize(9);
+          const valueLines = this.wrapText(cleanValue, safeTextWidth - 20);
+          valueLines.forEach((line) => {
+            const cleanLine = this.sanitizeTextForPDF(line);
+            this.doc.setCharSpace(0);
+            this.doc.setFont('helvetica', 'normal');
+            this.doc.setFontSize(9);
+            this.doc.setTextColor(40, 40, 40); // Dark gray for better readability
+            
+            const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%[0-9A-F]{2}/g, '');
+            this.doc.text(encodedLine || cleanLine, this.margin + 2, this.yPosition);
+            this.yPosition += 4; // Restored normal line spacing
+          });
+          this.yPosition += 3; // Restored normal spacing after
+        }
+      }
+    });
+    
+    // Move to next card position
+    this.yPosition = cardStartY + calculatedHeight + 8; // More spacing between cards
+  }
+
   private addSectionHeaderProfessional(title: string): void {
     this.checkNewPage(50);
     
     // Reduce spacing for specific sections
-    if (title === 'Copy Suggestions') {
+    if (title === 'Copy Suggestions' || title === 'Quick Wins' || title === 'Visual CRO Analysis') {
       this.yPosition += 8;
     } else if (title === 'Executive Summary') {
       this.yPosition += 10; // Reduced spacing for Executive Summary
@@ -986,6 +1349,67 @@ export class PDFExporter {
     const suggestionLines = this.wrapText(suggestion.suggestion, textWidth);
     // Ultra-compact padding for maximum space efficiency
     return 8 + (sectionLines.length * 4) + (suggestionLines.length * 3);
+  }
+
+  private calculateQuickWinHeight(win: any, textWidth: number): number {
+    const titleLines = this.wrapText(win.title, this.pageWidth - (2 * this.margin) - 15);
+    const descriptionLines = win.description || win.rationale ? 
+      this.wrapText(win.description || win.rationale, textWidth) : [];
+    // Compact padding for quick wins
+    return 12 + (titleLines.length * 4) + (descriptionLines.length * 3) + 8; // +8 for badges
+  }
+
+  private calculateQuickWinHeightMinimalist(win: any, textWidth: number): number {
+    const titleLines = this.wrapText(win.title, this.pageWidth - (2 * this.margin) - 15);
+    const descriptionLines = win.description ? 
+      this.wrapText(win.description, textWidth) : [];
+    const rationaleLines = win.rationale ? 
+      this.wrapText(win.rationale, textWidth - 5) : [];
+    
+    // Height calculation based on actual content spacing - compact to fit all cards
+    let totalHeight = 3; // Top padding (titleY = this.yPosition + 3)
+    totalHeight += (titleLines.length * 5) + 3; // Title lines + underline + spacing after title
+    totalHeight += (descriptionLines.length * 4) + 3; // Description lines + spacing after description
+    totalHeight += rationaleLines.length > 0 ? (rationaleLines.length * 3) + 3 : 0; // "Why:" combined with rationale lines + spacing after rationale
+    totalHeight += 1; // Minimal buffer after content (metadata moved to top right)
+    
+    return totalHeight;
+  }
+
+  private calculateQuickWinHeightModern(win: any, textWidth: number): number {
+    // Calculate height for clean design with purple bar
+    const cleanTitle = this.sanitizeTextForPDF(win.title || '');
+    const titleLines = this.wrapText(cleanTitle, textWidth - 10);
+    
+    const cleanDescription = this.sanitizeTextForPDF(win.description || '');
+    const descriptionLines = this.wrapText(cleanDescription, textWidth - 10);
+    
+    const cleanRationale = this.sanitizeTextForPDF(win.rationale || '');
+    const rationaleLines = this.wrapText(cleanRationale, textWidth - 10);
+    
+    // Height calculation for clean design with purple bar
+    let totalHeight = 3; // Top padding
+    totalHeight += (titleLines.length * 5) + 2; // Title lines + spacing
+    totalHeight += (descriptionLines.length * 4) + 2; // Description lines + spacing
+    totalHeight += rationaleLines.length > 0 ? 4 + (rationaleLines.length * 3) + 2 : 0; // "Why:" label + rationale lines + spacing
+    totalHeight += 1; // Bottom buffer
+    
+    return totalHeight;
+  }
+
+  private calculateVisualAnalysisHeight(data: any, textWidth: number): number {
+    let totalHeight = 8; // Base padding
+    
+    Object.entries(data).forEach(([key, value]) => {
+      if (value && typeof value === 'string') {
+        const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+        const labelLines = this.wrapText(label, textWidth - 10);
+        const valueLines = this.wrapText(String(value), textWidth - 10);
+        totalHeight += (labelLines.length * 3) + (valueLines.length * 3) + 5; // 5 for spacing
+      }
+    });
+    
+    return totalHeight;
   }
 }
 

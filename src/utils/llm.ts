@@ -125,6 +125,7 @@ ANALYSIS STRUCTURE:
    - Psychological principles behind each recommendation (adapted for purchase behavior type)
    - Effort level and timeline for each
    - Industry-specific best practices and benchmarks
+   - Compeling emotionaly & logically charged copy suggestions
 
 4. **QUICK WINS**
    - 3-5 high-impact, low-effort improvements that can be done immediately
