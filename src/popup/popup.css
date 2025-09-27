@@ -53,6 +53,9 @@ body {
 .main {
   flex: 1;
   padding: 20px;
+  overflow-x: hidden;
+  max-width: 400px;
+  box-sizing: border-box;
 }
 
 .state-panel {
@@ -729,6 +732,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 20px; /* Debug: ensure container has minimum height */
 }
 
 .quick-win-card {
@@ -764,6 +768,19 @@ body {
   font-size: 13px;
   color: #2d5a2d;
   line-height: 1.4;
+}
+
+.win-description p {
+  margin: 0 0 8px 0;
+}
+
+.win-description p:last-child {
+  margin-bottom: 0;
+}
+
+.win-description strong {
+  color: #0f4a0f;
+  font-weight: 600;
 }
 
 /* Responsive adjustments */
@@ -904,4 +921,192 @@ body {
   border-radius: 3px;
   transition: width 0.3s ease;
   width: 0%;
+}
+
+/* Visual CRO Analysis Section */
+.visual-cro-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 16px;
+  width: 100%;
+  max-width: calc(400px - 40px); /* Account for main padding */
+  overflow: hidden;
+}
+
+.visual-cro-card {
+  background: #ffffff;
+  border: 1px solid #e8eaed;
+  border-radius: 8px;
+  padding: 16px;
+  transition: all 0.2s ease;
+  overflow: hidden;
+  width: 100%;
+  max-width: calc(400px - 72px); /* Account for main padding + card padding + borders */
+  box-sizing: border-box;
+}
+
+.visual-cro-card:hover {
+  border-color: #dadce0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.visual-cro-card.critical-issue {
+  background: linear-gradient(135deg, #fef7f0 0%, #ffffff 100%);
+  border-color: #fbbf24;
+}
+
+.visual-cro-card h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #202124;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.visual-flow-content,
+.color-contrast-content,
+.critical-issue-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.flow-path,
+.flow-score,
+.contrast-item,
+.contrast-score {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  margin-bottom: 8px;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.flow-path strong,
+.flow-score strong,
+.contrast-item strong,
+.contrast-score strong {
+  color: #5f6368;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.flow-path span,
+.flow-score span,
+.contrast-item span,
+.contrast-score span {
+  color: #202124;
+  line-height: 1.4;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  hyphens: auto;
+  max-width: calc(400px - 104px); /* Even more restrictive for text content */
+  white-space: pre-wrap;
+}
+
+.score-badge {
+  background: #e8f0fe;
+  color: #1976d2;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-block;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
+.impact-badge {
+  background: #fff3e0;
+  color: #f57c00;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-block;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: calc(400px - 104px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.flow-distractions {
+  margin-top: 4px;
+}
+
+.flow-distractions strong {
+  font-size: 13px;
+  color: #5f6368;
+  margin-bottom: 4px;
+  display: block;
+}
+
+.bullet-list.small {
+  margin: 4px 0 0 0;
+  padding-left: 16px;
+}
+
+.bullet-list.small li {
+  font-size: 12px;
+  color: #5f6368;
+  margin-bottom: 2px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  hyphens: auto;
+  max-width: calc(400px - 120px); /* Account for all padding and indentation */
+  white-space: pre-wrap;
+}
+
+.issue-problem,
+.issue-solution,
+.issue-impact {
+  margin-bottom: 12px;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.issue-problem strong,
+.issue-solution strong,
+.issue-impact strong {
+  color: #5f6368;
+  font-weight: 500;
+  font-size: 13px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.issue-problem p,
+.issue-solution p {
+  margin: 0;
+  font-size: 13px;
+  color: #202124;
+  line-height: 1.4;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  hyphens: auto;
+  max-width: calc(400px - 104px); /* Force strict width constraint */
+  white-space: pre-wrap;
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 480px) {
+  .visual-cro-grid {
+    grid-template-columns: 1fr;
+  }
 }

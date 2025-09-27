@@ -11,7 +11,8 @@ export class StorageManager {
       openaiApiKey: '', 
       geminiApiKey: '', 
       openaiModel: 'gpt-5-mini', 
-      geminiModel: 'gemini-2.5-flash' 
+      geminiModel: 'gemini-2.5-flash',
+      fullPageScreenshot: false
     };
   }
 
@@ -86,6 +87,14 @@ export class StorageManager {
     if (optimized.executiveSummary && optimized.executiveSummary.length > 10) {
       optimized.executiveSummary = optimized.executiveSummary.slice(0, 10);
     }
+    
+    // Ensure quickWins is preserved
+    if (optimized.quickWins && optimized.quickWins.length > 10) {
+      optimized.quickWins = optimized.quickWins.slice(0, 10);
+    }
+    
+    console.log('Storage optimization - quickWins preserved:', optimized.quickWins);
+    console.log('Storage optimization - all keys:', Object.keys(optimized));
     
     return optimized;
   }

@@ -8,6 +8,7 @@ class OptionsController {
   private geminiApiKeyInput: HTMLInputElement | null = null;
   private openaiModelSelect: HTMLSelectElement | null = null;
   private geminiModelSelect: HTMLSelectElement | null = null;
+  private fullPageScreenshotCheckbox: HTMLInputElement | null = null;
   private openaiConfig: HTMLElement | null = null;
   private geminiConfig: HTMLElement | null = null;
   private saveButton: HTMLButtonElement | null = null;
@@ -36,13 +37,14 @@ class OptionsController {
     this.geminiApiKeyInput = document.getElementById('gemini-api-key') as HTMLInputElement;
     this.openaiModelSelect = document.getElementById('openai-model') as HTMLSelectElement;
     this.geminiModelSelect = document.getElementById('gemini-model') as HTMLSelectElement;
+    this.fullPageScreenshotCheckbox = document.getElementById('full-page-screenshot') as HTMLInputElement;
     this.openaiConfig = document.getElementById('openai-config');
     this.geminiConfig = document.getElementById('gemini-config');
     this.saveButton = document.getElementById('save-button') as HTMLButtonElement;
     this.cacheCountElement = document.getElementById('cache-count');
 
     if (!this.providerSelect || !this.openaiApiKeyInput || !this.geminiApiKeyInput || 
-        !this.openaiModelSelect || !this.geminiModelSelect || !this.saveButton ||
+        !this.openaiModelSelect || !this.geminiModelSelect || !this.fullPageScreenshotCheckbox || !this.saveButton ||
         !this.openaiConfig || !this.geminiConfig) {
       throw new Error('Required form elements not found');
     }
@@ -120,6 +122,11 @@ class OptionsController {
       if (this.geminiModelSelect) {
         this.geminiModelSelect.value = settings.geminiModel || 'gemini-2.5-pro';
       }
+      
+      // Set full page screenshot setting
+      if (this.fullPageScreenshotCheckbox) {
+        this.fullPageScreenshotCheckbox.checked = settings.fullPageScreenshot || false;
+      }
 
       // Update UI based on provider
       this.handleProviderChange();
@@ -146,7 +153,8 @@ class OptionsController {
         openaiApiKey: this.openaiApiKeyInput?.value.trim() || '',
         geminiApiKey: this.geminiApiKeyInput?.value.trim() || '',
         openaiModel: this.openaiModelSelect?.value || 'gpt-5',
-        geminiModel: this.geminiModelSelect?.value || 'gemini-2.5-pro'
+        geminiModel: this.geminiModelSelect?.value || 'gemini-2.5-pro',
+        fullPageScreenshot: this.fullPageScreenshotCheckbox?.checked || false
       };
 
       // Validate current provider's API key

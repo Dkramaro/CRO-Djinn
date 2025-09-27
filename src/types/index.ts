@@ -216,6 +216,7 @@ export interface LLMAnalysis {
   implementationRoadmap?: ImplementationStep[];
   psychologyInsights?: PsychologyInsight[];
   competitiveBenchmarks?: CompetitiveBenchmark[];
+  visualCROAnalysis?: VisualCROAnalysis;
   executiveSummary: string[];
   checklist: ChecklistItem[];
   copySuggestions?: CopySuggestion[];
@@ -402,6 +403,27 @@ export interface CopySuggestion {
   suggestion: string;
 }
 
+export interface VisualCROAnalysis {
+  visualFlow: {
+    eyeFlowPath: string;
+    flowScore: number;
+    guidesToCTA: boolean;
+    distractions: string[];
+  };
+  colorContrast: {
+    ctaContrast: string;
+    readability: string;
+    emotionalResponse: string;
+    contrastScore: number;
+  };
+  criticalIssue: {
+    problem: string;
+    solution: string;
+    impact: string;
+    urgency: string;
+  };
+}
+
 // Storage types
 export interface CachedAudit {
   analysis: LLMAnalysis;
@@ -416,6 +438,7 @@ export interface ExtensionSettings {
   geminiApiKey: string;
   openaiModel: string;
   geminiModel: string;
+  fullPageScreenshot: boolean;
 }
 
 // UI state types

@@ -102,6 +102,10 @@ class PopupController {
       return;
     }
 
+    // TEMPORARY: Always force refresh to test quickWins fix
+    console.log('Forcing fresh analysis to test quickWins fix...');
+    await StorageManager.clearCache();
+    
     // Check if we should use cache
     if (!forceRefresh) {
       const cached = await StorageManager.getCachedAudit(this.currentUrl);
@@ -118,7 +122,7 @@ class PopupController {
     }
 
     try {
-      // Step 1: Check API key
+      // Step 1: Check API key and get settings
       const settings = await StorageManager.getSettings();
       const currentApiKey = settings.provider === 'gemini' ? settings.geminiApiKey : settings.openaiApiKey;
       if (!currentApiKey) {
@@ -127,9 +131,8 @@ class PopupController {
         return;
       }
 
-      // Check if full-page analysis is enabled
-      const fullPageCheckbox = document.getElementById('full-page-checkbox') as HTMLInputElement;
-      const useFullPage = fullPageCheckbox?.checked || false;
+      // Get full-page analysis setting from options
+      const useFullPage = settings.fullPageScreenshot || false;
 
       // Step 2: Start scraping
       this.state = { status: 'scraping' };
@@ -312,8 +315,43 @@ class PopupController {
         this.populateStreamlinedRecommendations(analysis.recommendations);
       }
       
-      if (analysis.quickWins) {
-        this.populateQuickWins(analysis.quickWins);
+      console.log('Full analysis object:', analysis);
+      console.log('Quick wins check:', analysis.quickWins);
+      console.log('Quick wins type:', typeof analysis.quickWins);
+      console.log('Quick wins length:', analysis.quickWins?.length);
+      console.log('Analysis keys:', Object.keys(analysis));
+      
+      // Try multiple ways to find quick wins data
+      let quickWinsData = null;
+      
+      if (analysis.quickWins && Array.isArray(analysis.quickWins) && analysis.quickWins.length > 0) {
+        quickWinsData = analysis.quickWins;
+        console.log('Found quickWins array:', quickWinsData);
+      } else if (analysis.quickWins && typeof analysis.quickWins === 'object') {
+        // Try to extract from object
+        quickWinsData = Object.values(analysis.quickWins).filter(item => 
+          item && typeof item === 'object' && (item.title || item.description)
+        );
+        console.log('Extracted quickWins from object:', quickWinsData);
+      } else {
+        console.warn('No quick wins data found in analysis');
+        console.warn('Available analysis keys:', Object.keys(analysis));
+      }
+      
+      if (quickWinsData && quickWinsData.length > 0) {
+        console.log('Populating quick wins with data:', quickWinsData);
+        this.populateQuickWins(quickWinsData);
+      } else {
+        console.warn('No valid quick wins data to display');
+        // Hide the quick wins section entirely if no data
+        const container = document.getElementById('quick-wins');
+        if (container) {
+          container.style.display = 'none';
+        }
+      }
+      
+      if (analysis.visualCROAnalysis) {
+        this.populateVisualCROAnalysis(analysis.visualCROAnalysis);
       }
     } catch (error) {
       console.warn('Error populating analysis sections:', error);
@@ -624,32 +662,107 @@ class PopupController {
     });
   }
 
-  private populateQuickWins(quickWins: any[]): void {
+  private populateQuickWins(quickWins: any): void {
     const container = document.getElementById('quick-wins');
-    if (!container) return;
+    if (!container) {
+      console.warn('Quick wins container not found');
+      return;
+    }
 
+    // Make sure the container is visible
+    container.style.display = 'block';
+
+    console.log('Populating quick wins:', quickWins);
+    console.log('Quick wins type:', typeof quickWins);
+    console.log('Is array:', Array.isArray(quickWins));
     container.innerHTML = '';
-    quickWins.forEach((win, index) => {
+    
+    // Handle different data formats
+    let winsArray: any[] = [];
+    
+    if (Array.isArray(quickWins)) {
+      winsArray = quickWins;
+    } else if (quickWins && typeof quickWins === 'object') {
+      // If it's an object, try to extract array from it
+      if (quickWins.quickWins && Array.isArray(quickWins.quickWins)) {
+        winsArray = quickWins.quickWins;
+      } else if (quickWins.data && Array.isArray(quickWins.data)) {
+        winsArray = quickWins.data;
+      } else {
+        // Convert object to array if it has numeric keys
+        winsArray = Object.values(quickWins).filter(item => 
+          item && typeof item === 'object' && (item.title || item.description)
+        );
+      }
+    }
+    
+    if (!winsArray || winsArray.length === 0) {
+      console.warn('No valid quick wins data provided');
+      container.innerHTML = '<p style="color: #666; font-style: italic;">No quick wins available</p>';
+      return;
+    }
+
+    winsArray.forEach((win, index) => {
       const winElement = document.createElement('div');
       winElement.className = 'quick-win-card';
 
-      const effortStars = '●'.repeat(win.effort);
+      const effortStars = '●'.repeat(win.effort || 1);
+      const description = win.description || win.rationale || 'No description available';
       
       winElement.innerHTML = `
         <div class="win-header">
-          <h4 class="win-title">${win.title}</h4>
+          <h4 class="win-title">${win.title || 'Quick Win'}</h4>
           <div class="win-badges">
             <span class="effort-badge">Effort: ${effortStars}</span>
-            <span class="timeline-badge">${win.timeline}</span>
+            <span class="timeline-badge">${win.timeline || 'TBD'}</span>
           </div>
         </div>
         <div class="win-description">
-          ${win.description}
+          <p><strong>What to do:</strong> ${description}</p>
+          ${win.rationale && win.description !== win.rationale ? `<p><strong>Why:</strong> ${win.rationale}</p>` : ''}
         </div>
       `;
 
       container.appendChild(winElement);
     });
+    
+    console.log('Quick wins populated successfully');
+  }
+
+  private populateVisualCROAnalysis(visualCRO: any): void {
+    const section = document.getElementById('visual-cro-section');
+    if (!section) return;
+
+    // Show the section
+    section.classList.remove('hidden');
+    
+    console.log('populateVisualCROAnalysis called with:', visualCRO);
+
+    // Populate Visual Flow
+    this.setTextContent('eye-flow-path', visualCRO.visualFlow?.eyeFlowPath || 'Analyzing...');
+    this.setTextContent('flow-score', `${visualCRO.visualFlow?.flowScore || '-'}/10`);
+    
+    // Populate flow distractions
+    const flowDistractionsContainer = document.getElementById('flow-distractions-container');
+    const flowDistractionsList = document.getElementById('flow-distractions');
+    if (flowDistractionsList && visualCRO.visualFlow?.distractions?.length > 0) {
+      flowDistractionsContainer?.classList.remove('hidden');
+      this.populateList('flow-distractions', visualCRO.visualFlow.distractions);
+    } else {
+      flowDistractionsContainer?.classList.add('hidden');
+    }
+
+
+    // Populate Color & Contrast
+    this.setTextContent('cta-contrast', visualCRO.colorContrast?.ctaContrast || 'Analyzing...');
+    this.setTextContent('readability', visualCRO.colorContrast?.readability || 'Analyzing...');
+    this.setTextContent('emotional-response', visualCRO.colorContrast?.emotionalResponse || 'Analyzing...');
+    this.setTextContent('contrast-score', `${visualCRO.colorContrast?.contrastScore || '-'}/10`);
+
+    // Populate Critical Issue
+    this.setTextContent('critical-problem', visualCRO.criticalIssue?.problem || 'Analyzing critical visual issues...');
+    this.setTextContent('critical-solution', visualCRO.criticalIssue?.solution || 'Generating solution...');
+    this.setTextContent('critical-impact', visualCRO.criticalIssue?.impact || 'Analyzing...');
   }
 
   private populateConversionAnalysis(conversionAnalysis: any): void {
@@ -906,7 +1019,6 @@ class PopupController {
     if (!visualHierarchy) return;
     
     this.setTextContent('hierarchy-score', `${visualHierarchy.effectiveness}/10`);
-    this.setTextContent('cta-prominence', visualHierarchy.ctaProminence || 'Not assessed');
     
     this.populateList('hierarchy-issues', visualHierarchy.issues || []);
     this.populateList('hierarchy-improvements', visualHierarchy.improvements || []);

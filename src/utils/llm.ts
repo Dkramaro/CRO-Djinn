@@ -130,6 +130,12 @@ ANALYSIS STRUCTURE:
    - 3-5 high-impact, low-effort improvements that can be done immediately
    - Tailored to the specific page type and business model
 
+5. **VISUAL CRO ANALYSIS** (For Visual Analysis Only)
+   As a $10,000/day CRO auditor, provide dedicated visual conversion analysis:
+   - VISUAL FLOW ANALYSIS: How does the eye naturally flow through the page? Do colors and content hierarchy guide users toward CTAs? Are there visual distractions that pull attention away from conversion goals?
+   - COLOR & CONTRAST EVALUATION: How effective are the color choices for conversion? Is there sufficient contrast for readability and CTA prominence? Do colors create the right emotional response for the target audience?
+   - CRITICAL VISUAL ISSUE: What's the single biggest visual problem preventing conversions? Focus on business impact and user behavior. Provide clear, non-technical solutions that marketers and executives can understand and implement. Avoid technical details like hex codes, pixel measurements, or CSS specifications. Instead, describe the problem in terms of user experience and business outcomes, then provide simple, actionable solutions that can be communicated to designers and developers.
+
 Return analysis as JSON with this ENHANCED structure:
 {
   "starRating": 2,
@@ -184,6 +190,26 @@ Return analysis as JSON with this ENHANCED structure:
       "timeline": "2-3 days"
     }
   ],
+  "visualCROAnalysis": {
+    "visualFlow": {
+      "eyeFlowPath": "Hero → Value Prop → Social Proof → CTA",
+      "flowScore": 7,
+      "guidesToCTA": true,
+      "distractions": ["Competing CTAs in sidebar", "Too many color variations"]
+    },
+    "colorContrast": {
+      "ctaContrast": "Excellent - 4.8:1 ratio",
+      "readability": "Good overall", 
+      "emotionalResponse": "Trust-building blues with conversion-optimized orange CTAs",
+      "contrastScore": 8
+    },
+    "criticalIssue": {
+      "problem": "Primary CTA blends with background reducing click-through rates",
+      "solution": "Make the main call-to-action button stand out with a contrasting color that draws attention. Use a bright, action-oriented color that creates visual separation from the background. Ensure the button text is clearly readable and the overall design encourages clicks.",
+      "impact": "High - likely 15-20% conversion increase",
+      "urgency": "Critical"
+    }
+  },
   "executiveSummary": [
     "Context: B2B SaaS pricing page for high-consideration software purchase requiring trust and risk mitigation",
     "Key insight: Missing critical trust signals and implementation clarity needed for enterprise buyers",
@@ -319,6 +345,8 @@ STAR RATING CRITERIA:
   private validateAndSanitizeAnalysis(analysis: any): LLMAnalysis {
     // Log the raw analysis for debugging
     console.log('Raw LLM Analysis:', analysis);
+    console.log('Raw quickWins:', analysis.quickWins);
+    console.log('Raw visualCROAnalysis:', analysis.visualCROAnalysis);
     
     // Provide sensible defaults for missing fields
     const result = {
@@ -333,12 +361,15 @@ STAR RATING CRITERIA:
       conversionAnalysis: analysis.conversionAnalysis,
       currentStateAnalysis: analysis.currentStateAnalysis,
       recommendations: analysis.recommendations,
+      quickWins: analysis.quickWins,
       implementationRoadmap: analysis.implementationRoadmap,
       psychologyInsights: analysis.psychologyInsights,
-      competitiveBenchmarks: analysis.competitiveBenchmarks
+      competitiveBenchmarks: analysis.competitiveBenchmarks,
+      visualCROAnalysis: analysis.visualCROAnalysis
     };
     
     console.log('Validated Analysis:', result);
+    console.log('Validated quickWins:', result.quickWins);
     return result;
   }
 

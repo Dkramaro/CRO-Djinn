@@ -56,14 +56,6 @@
             </div>
           </div>
 
-          <!-- Analysis Options -->
-          <div class="analysis-options">
-            <label class="checkbox-container">
-              <input type="checkbox" id="full-page-checkbox">
-              <span class="checkmark"></span>
-              <span class="checkbox-label">Full page analysis (captures entire page)</span>
-            </label>
-          </div>
 
           <button id="scan-button" class="primary-button">
             <span class="button-text">Scan Page</span>
@@ -172,6 +164,71 @@
             <ol id="customer-journey" class="journey-steps">
               <li>Loading customer journey analysis...</li>
             </ol>
+          </div>
+        </section>
+
+        <!-- Visual CRO Analysis -->
+        <section id="visual-cro-section" class="section hidden">
+          <h3 class="section-title">👁️ Visual CRO Analysis</h3>
+          <div class="visual-cro-grid">
+            <div class="visual-cro-card">
+              <h4>📍 Visual Flow</h4>
+              <div class="visual-flow-content">
+                <div class="flow-path">
+                  <strong>Eye Flow:</strong>
+                  <span id="eye-flow-path">Analyzing visual flow...</span>
+                </div>
+                <div class="flow-score">
+                  <strong>Flow Score:</strong>
+                  <span id="flow-score" class="score-badge">-/10</span>
+                </div>
+                <div class="flow-distractions" id="flow-distractions-container">
+                  <strong>Distractions:</strong>
+                  <ul id="flow-distractions" class="bullet-list small"></ul>
+                </div>
+              </div>
+            </div>
+            
+            
+            <div class="visual-cro-card">
+              <h4>🎨 Color & Contrast</h4>
+              <div class="color-contrast-content">
+                <div class="contrast-item">
+                  <strong>CTA Contrast:</strong>
+                  <span id="cta-contrast">Analyzing...</span>
+                </div>
+                <div class="contrast-item">
+                  <strong>Readability:</strong>
+                  <span id="readability">Analyzing...</span>
+                </div>
+                <div class="contrast-item">
+                  <strong>Emotional Response:</strong>
+                  <span id="emotional-response">Analyzing...</span>
+                </div>
+                <div class="contrast-score">
+                  <strong>Contrast Score:</strong>
+                  <span id="contrast-score" class="score-badge">-/10</span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="visual-cro-card critical-issue">
+              <h4>🚨 Critical Visual Issue</h4>
+              <div class="critical-issue-content">
+                <div class="issue-problem">
+                  <strong>Problem:</strong>
+                  <p id="critical-problem">Analyzing critical visual issues...</p>
+                </div>
+                <div class="issue-solution">
+                  <strong>Solution:</strong>
+                  <p id="critical-solution">Generating solution...</p>
+                </div>
+                <div class="issue-impact">
+                  <strong>Expected Impact:</strong>
+                  <span id="critical-impact" class="impact-badge">Analyzing...</span>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
