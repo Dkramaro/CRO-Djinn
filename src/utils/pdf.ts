@@ -607,9 +607,9 @@ export class PDFExporter {
       // First, calculate the height by simulating content placement
       let calculatedHeight = 0; // Start with no padding
       
-      // Calculate title height - apply forced width constraint specifically for title only
+      // Calculate title height - apply intelligent width constraint specifically for title only
       const titleText = `${index + 1}. ${rec.title}`;
-      const titleTextWidth = this.pageWidth - (2 * this.margin) - 50; // Force much narrower width for title only (14pt font needs more space)
+      const titleTextWidth = this.calculateOptimalTitleWidth(titleText, index);
       const wrappedTitle = this.wrapText(titleText, titleTextWidth);
       calculatedHeight += 8; // Text starts 8pt from card top (increased from 3)
       calculatedHeight += (wrappedTitle.length * 5); // Increased line spacing for larger font
@@ -690,35 +690,32 @@ export class PDFExporter {
         titleY += 5; // Increased line spacing to match larger font
       });
       
-      // Compact badges with professional styling - positioned to avoid text overlap
-      this.doc.setFontSize(7);
+      // Single compact badge row with color coding by priority
+      this.doc.setFontSize(8);
       this.doc.setFont('helvetica', 'bold');
       
-      // Calculate badge positions to avoid overlap with text
+      // Calculate badge position
       const badgeY = titleY + 2;
       
-      // Priority badge
+      // Create compact badge text
+      const effortLabel = this.getEffortLabel(rec.effort);
+      const timelineText = rec.timeline ? rec.timeline : 'TBD';
+      const badgeText = `${rec.priority.toUpperCase()} • ${effortLabel} Effort • ${timelineText} to implement`;
+      
+      // Get priority-based color for the badge
       const priorityColor = this.getPriorityColor(rec.priority);
+      
+      // Calculate badge width based on text
+      const badgeTextWidth = this.doc.getTextWidth(badgeText);
+      const badgeWidth = badgeTextWidth + 12; // Add padding
+      
+      // Draw single compact badge
       this.doc.setFillColor(...priorityColor);
-      this.doc.roundedRect(this.margin + 6, badgeY, 32, 8, 2, 2, 'F');
+      this.doc.roundedRect(this.margin + 6, badgeY, badgeWidth, 8, 2, 2, 'F');
       this.doc.setTextColor(255, 255, 255);
-      this.doc.text(rec.priority.toUpperCase(), this.margin + 8, badgeY + 6);
+      this.doc.text(badgeText, this.margin + 8, badgeY + 5.5); // Center text vertically in 8pt badge
       
-      // Effort badge
-      this.doc.setFillColor(...this.colors.secondary);
-      this.doc.roundedRect(this.margin + 42, badgeY, 36, 8, 2, 2, 'F');
-      this.doc.setTextColor(255, 255, 255);
-      this.doc.text(`EFFORT: ${this.getEffortLabel(rec.effort)}`, this.margin + 44, badgeY + 6);
-      
-      // Timeline badge
-      if (rec.timeline) {
-        this.doc.setFillColor(...this.colors.primary);
-        this.doc.roundedRect(this.margin + 82, badgeY, 40, 8, 2, 2, 'F');
-        this.doc.setTextColor(255, 255, 255);
-        this.doc.text(rec.timeline.toUpperCase(), this.margin + 84, badgeY + 6);
-      }
-      
-      let textY = badgeY + 14; // Increased space after badges to prevent overlap
+      let textY = badgeY + 18; // Increased space after badge for better visual separation
       
       // Issue section
       this.doc.setTextColor(220, 53, 69); // Red color for ISSUE label
@@ -943,23 +940,33 @@ export class PDFExporter {
       const tempY = this.yPosition;
       let calculatedHeight = 3; // Top padding
       
-      // Calculate title height
+      // Calculate title height (effort/timeline now on same line, so no extra height needed)
       const cleanTitle = this.sanitizeTextForPDF(win.title || '');
       const wrappedTitle = this.wrapText(cleanTitle, safeTextWidth - 10);
       calculatedHeight += (wrappedTitle.length * 5) + 2;
       
-      // Calculate description height
+      // Calculate description height (now with inline "What to do:" label)
       if (win.description) {
         const cleanDescription = this.sanitizeTextForPDF(win.description);
-        const descriptionLines = this.wrapText(cleanDescription, safeTextWidth - 10);
-        calculatedHeight += (descriptionLines.length * 4) + 2;
+        // Set font to get accurate label width
+        this.doc.setFont('helvetica', 'bold');
+        this.doc.setFontSize(10);
+        const labelWidth = this.doc.getTextWidth('What to do:');
+        const contentWidth = safeTextWidth - labelWidth - 5;
+        const descriptionLines = this.wrapText(cleanDescription, contentWidth);
+        calculatedHeight += (descriptionLines.length * 4) + 1; // Reduced spacing to match rendering
       }
       
-      // Calculate rationale height
+      // Calculate rationale height (now with inline "Why:" label)
       if (win.rationale) {
         const cleanRationale = this.sanitizeTextForPDF(win.rationale);
-        const rationaleLines = this.wrapText(cleanRationale, safeTextWidth - 10);
-        calculatedHeight += 4 + (rationaleLines.length * 3) + 2;
+        // Set font to get accurate label width
+        this.doc.setFont('helvetica', 'bold');
+        this.doc.setFontSize(10);
+        const labelWidth = this.doc.getTextWidth('Why:');
+        const contentWidth = safeTextWidth - labelWidth - 5;
+        const rationaleLines = this.wrapText(cleanRationale, contentWidth);
+        calculatedHeight += (rationaleLines.length * 4) + 2;
       }
       
       calculatedHeight += 1; // Bottom buffer
@@ -977,12 +984,14 @@ export class PDFExporter {
       this.doc.roundedRect(this.margin - 2, this.yPosition - 1, 4, calculatedHeight, 0, 0, 'F');
       
       // Now add text content on top of the container
-      // Clean title with underline (positioned after purple bar)
+      // Title and effort/timeline on the same line (matching popup layout)
       this.doc.setTextColor(...this.colors.primary); // Purple text for theme
       this.doc.setFont('helvetica', 'bold');
       this.doc.setFontSize(11);
       
       let titleY = this.yPosition + 3;
+      
+      // Render title on the left side
       wrappedTitle.forEach((line) => {
         const cleanLine = this.sanitizeTextForPDF(line);
         this.doc.setCharSpace(0);
@@ -995,10 +1004,10 @@ export class PDFExporter {
         titleY += 5;
       });
       
-      // Clean metadata in top right - effort and timeline
-      this.doc.setTextColor(120, 120, 120); // Light gray text for subtle appearance
+      // Add effort/timeline on the same line as the first title line
+      this.doc.setTextColor(160, 160, 160); // Lighter gray text for more subtle appearance
       this.doc.setFont('helvetica', 'normal');
-      this.doc.setFontSize(8);
+      this.doc.setFontSize(7); // Smaller font size
       
       const effortLabel = this.getEffortLabel(win.effort);
       let metadataText = `Effort: ${effortLabel}`;
@@ -1006,19 +1015,32 @@ export class PDFExporter {
         metadataText += ` • Timeline: ${win.timeline}`;
       }
       
-      // Position metadata in top right
+      // Position metadata on the same line as the title (right side)
       const metadataX = this.pageWidth - this.margin - 2;
       this.doc.text(metadataText, metadataX, this.yPosition + 3, { align: 'right' });
       
       this.yPosition = titleY + 2;
       
-      // Clean description (positioned after purple bar)
+      // What to do section with inline label
       if (win.description) {
-        this.doc.setTextColor(0, 0, 0); // Black text for visibility
+        this.doc.setTextColor(...this.colors.primary); // Purple text for "What to do:" label
+        this.doc.setFont('helvetica', 'bold');
+        this.doc.setFontSize(10);
+        this.doc.text('What to do:', this.margin + 6, this.yPosition);
+        
+        // Add description content on the same line
+        this.doc.setTextColor(0, 0, 0); // Black text for content
         this.doc.setFont('helvetica', 'normal');
         this.doc.setFontSize(10);
         const cleanDescription = this.sanitizeTextForPDF(win.description);
-        const descriptionLines = this.wrapText(cleanDescription, safeTextWidth - 10);
+        
+        // Calculate width available for content after "What to do:" label
+        this.doc.setFont('helvetica', 'bold');
+        this.doc.setFontSize(10);
+        const labelWidth = this.doc.getTextWidth('What to do:');
+        const contentWidth = safeTextWidth - labelWidth - 5; // 5pt spacing between label and content
+        const descriptionLines = this.wrapText(cleanDescription, contentWidth);
+        
         descriptionLines.forEach((line, lineIndex) => {
           const cleanLine = this.sanitizeTextForPDF(line);
           this.doc.setCharSpace(0);
@@ -1027,36 +1049,44 @@ export class PDFExporter {
           this.doc.setTextColor(0, 0, 0); // Ensure black text
           
           const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%[0-9A-F]{2}/g, '');
-          const bulletPoint = lineIndex === 0 ? '• ' : '  ';
-          this.doc.text(bulletPoint + (encodedLine || cleanLine), this.margin + 6, this.yPosition);
+          const xPosition = lineIndex === 0 ? this.margin + 6 + labelWidth + 5 : this.margin + 6; // First line after label, subsequent lines aligned with label
+          this.doc.text(encodedLine || cleanLine, xPosition, this.yPosition);
           this.yPosition += 4;
         });
-        this.yPosition += 2;
+        this.yPosition += 1; // Reduced spacing between What to do and Why sections
       }
       
-      // Clean rationale section (positioned after purple bar)
+      // Why section with inline label
       if (win.rationale) {
         this.doc.setTextColor(...this.colors.primary); // Purple text for "Why:" label
         this.doc.setFont('helvetica', 'bold');
-        this.doc.setFontSize(9);
+        this.doc.setFontSize(10);
         this.doc.text('Why:', this.margin + 6, this.yPosition);
-        this.yPosition += 4;
         
-        this.doc.setTextColor(0, 0, 0); // Black text for rationale content
+        // Add rationale content on the same line
+        this.doc.setTextColor(0, 0, 0); // Black text for content
         this.doc.setFont('helvetica', 'normal');
-        this.doc.setFontSize(9);
+        this.doc.setFontSize(10);
         const cleanRationale = this.sanitizeTextForPDF(win.rationale);
-        const rationaleLines = this.wrapText(cleanRationale, safeTextWidth - 10);
-        rationaleLines.forEach((line) => {
+        
+        // Calculate width available for content after "Why:" label
+        this.doc.setFont('helvetica', 'bold');
+        this.doc.setFontSize(10);
+        const labelWidth = this.doc.getTextWidth('Why:');
+        const contentWidth = safeTextWidth - labelWidth - 5; // 5pt spacing between label and content
+        const rationaleLines = this.wrapText(cleanRationale, contentWidth);
+        
+        rationaleLines.forEach((line, lineIndex) => {
           const cleanLine = this.sanitizeTextForPDF(line);
           this.doc.setCharSpace(0);
           this.doc.setFont('helvetica', 'normal');
-          this.doc.setFontSize(9);
+          this.doc.setFontSize(10);
           this.doc.setTextColor(0, 0, 0); // Ensure black text for content
           
           const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%[0-9A-F]{2}/g, '');
-          this.doc.text(encodedLine || cleanLine, this.margin + 8, this.yPosition);
-          this.yPosition += 3;
+          const xPosition = lineIndex === 0 ? this.margin + 6 + labelWidth + 5 : this.margin + 6; // First line after label, subsequent lines aligned with label
+          this.doc.text(encodedLine || cleanLine, xPosition, this.yPosition);
+          this.yPosition += 4;
         });
         this.yPosition += 2;
       }
@@ -1466,11 +1496,11 @@ export class PDFExporter {
 
   private getPriorityColor(priority: string): [number, number, number] {
     switch (priority) {
-      case 'critical': return this.colors.primary; // Bright purple for critical
-      case 'high': return this.colors.warning; // Warm amber for high
-      case 'medium': return this.colors.secondary; // Medium purple for medium
-      case 'low': return this.colors.success; // Bright yellow-orange for low
-      default: return this.colors.muted; // Purple for default
+      case 'critical': return [220, 53, 69]; // Match ISSUE text color for critical
+      case 'high': return this.colors.warning; // Keep current yellow for high
+      case 'medium': return [100, 100, 100]; // Neutral gray for medium
+      case 'low': return [120, 120, 120]; // Light gray for low
+      default: return [100, 100, 100]; // Neutral gray for default
     }
   }
 
@@ -1485,6 +1515,29 @@ export class PDFExporter {
       case 'low': return 'Low';
       default: return String(effort);
     }
+  }
+
+  private calculateOptimalTitleWidth(titleText: string, index: number): number {
+    // Set font to match title rendering for accurate width calculation
+    this.doc.setFont('helvetica', 'bold');
+    this.doc.setFontSize(14);
+    
+    // Calculate available width within card boundaries
+    const cardWidth = this.pageWidth - (2 * this.margin) + 4; // Full card width
+    const leftMargin = 6; // Space from purple bar
+    const rightMargin = 6; // Space from card edge
+    const availableWidth = cardWidth - leftMargin - rightMargin;
+    
+    // For first recommendation, use slightly more conservative width
+    // For subsequent recommendations, use standard width
+    const widthMultiplier = index === 0 ? 0.85 : 0.90; // 85% for first, 90% for others
+    const optimalWidth = availableWidth * widthMultiplier;
+    
+    // Ensure minimum width for readability
+    const minWidth = 100;
+    const maxWidth = availableWidth - 10; // Leave some buffer
+    
+    return Math.max(minWidth, Math.min(optimalWidth, maxWidth));
   }
 
   private cleanText(text: string): string {
