@@ -32,6 +32,13 @@ class PopupController {
   }
 
   private setupEventListeners(): void {
+    // Listen for progress updates from background/content script
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message.type === 'screenshot-progress') {
+        this.updateProgress(message.current, message.total);
+      }
+    });
+
     // Scan button
     const scanButton = document.getElementById('scan-button');
     scanButton?.addEventListener('click', () => this.handleScanClick());
@@ -120,13 +127,21 @@ class PopupController {
         return;
       }
 
+      // Check if full-page analysis is enabled
+      const fullPageCheckbox = document.getElementById('full-page-checkbox') as HTMLInputElement;
+      const useFullPage = fullPageCheckbox?.checked || false;
+
       // Step 2: Start scraping
       this.state = { status: 'scraping' };
       this.updateUI();
       
-      // Update loading message based on provider
-      if (settings.provider === 'gemini') {
+      // Update loading message based on provider and analysis type
+      if (useFullPage) {
+        this.updateLoadingText('Preparing full-page analysis...');
+      } else if (settings.provider === 'gemini') {
         this.updateLoadingText('Capturing screenshot and scraping content...');
+      } else {
+        this.updateLoadingText('Scraping page content...');
       }
 
       // Step 3: Scrape page content
@@ -142,21 +157,25 @@ class PopupController {
       this.state = { status: 'analyzing' };
       this.updateUI();
       
-      // Update analyzing message based on provider
-      if (settings.provider === 'gemini') {
+      // Update analyzing message based on provider and analysis type
+      if (useFullPage) {
+        this.updateLoadingText('Capturing and analyzing full page...');
+        this.showProgressTracking(true);
+      } else if (settings.provider === 'gemini') {
         this.updateLoadingText('Analyzing page with visual + content insights...');
       } else {
         this.updateLoadingText('Analyzing page content...');
       }
 
       const analyzer = new LLMAnalyzer(settings);
-      const analysis = await analyzer.analyzeRawPageData(rawData);
+      const analysis = await analyzer.analyzeRawPageData(rawData, useFullPage);
 
       // Step 5: Cache results
       const modelName = settings.provider === 'gemini' ? settings.geminiModel : settings.openaiModel;
       await StorageManager.saveCachedAudit(this.currentUrl, analysis, rawData, modelName);
 
       // Step 6: Show results
+      this.showProgressTracking(false); // Hide progress tracking
       this.state = {
         status: 'ready',
         analysis,
@@ -177,25 +196,46 @@ class PopupController {
       throw new Error('No active tab found');
     }
 
-    // Inject content script if needed
+    const tabId = tabs[0].id;
+
+    // First try to send message to see if content script is already loaded
     try {
-      await chrome.scripting.executeScript({
-        target: { tabId: tabs[0].id },
-        files: ['content.js']
+      return await new Promise((resolve, reject) => {
+        chrome.tabs.sendMessage(tabId, message, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            resolve(response);
+          }
+        });
       });
     } catch (error) {
-      // Content script might already be injected
+      // Content script not loaded, inject it
+      console.log('Content script not found, injecting...');
+      
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          files: ['content.js']
+        });
+        
+        // Wait a moment for the script to load
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Try sending the message again
+        return new Promise((resolve, reject) => {
+          chrome.tabs.sendMessage(tabId, message, (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+            } else {
+              resolve(response);
+            }
+          });
+        });
+      } catch (injectionError) {
+        throw new Error(`Failed to inject content script: ${injectionError}`);
+      }
     }
-
-    return new Promise((resolve, reject) => {
-      chrome.tabs.sendMessage(tabs[0].id!, message, (response) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-        } else {
-          resolve(response);
-        }
-      });
-    });
   }
 
   private updateUI(): void {
@@ -1121,6 +1161,36 @@ class PopupController {
   private handleVisualAnalysisLinkClick(): void {
     // Open options page to switch to Gemini
     chrome.runtime.openOptionsPage();
+  }
+
+  private showProgressTracking(show: boolean): void {
+    const progressContainer = document.getElementById('screenshot-progress');
+    if (progressContainer) {
+      if (show) {
+        progressContainer.classList.remove('hidden');
+      } else {
+        progressContainer.classList.add('hidden');
+      }
+    }
+  }
+
+  private updateProgress(current: number, total: number): void {
+    const progressText = document.getElementById('progress-text');
+    const progressCount = document.getElementById('progress-count');
+    const progressFill = document.getElementById('progress-fill');
+
+    if (progressText) {
+      progressText.textContent = `Capturing screenshot ${current} of ${total}...`;
+    }
+
+    if (progressCount) {
+      progressCount.textContent = `${current}/${total}`;
+    }
+
+    if (progressFill) {
+      const percentage = total > 0 ? (current / total) * 100 : 0;
+      progressFill.style.width = `${percentage}%`;
+    }
   }
 }
 

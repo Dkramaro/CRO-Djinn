@@ -56,6 +56,15 @@
             </div>
           </div>
 
+          <!-- Analysis Options -->
+          <div class="analysis-options">
+            <label class="checkbox-container">
+              <input type="checkbox" id="full-page-checkbox">
+              <span class="checkmark"></span>
+              <span class="checkbox-label">Full page analysis (captures entire page)</span>
+            </label>
+          </div>
+
           <button id="scan-button" class="primary-button">
             <span class="button-text">Scan Page</span>
             <span class="loading-spinner hidden"></span>
@@ -68,6 +77,18 @@
         <div class="loading-container">
           <div class="loading-spinner"></div>
           <p id="loading-text">Scraping page...</p>
+          
+          <!-- Screenshot Progress -->
+          <div id="screenshot-progress" class="screenshot-progress hidden">
+            <div class="progress-info">
+              <span id="progress-text">Capturing screenshots...</span>
+              <span id="progress-count">0/0</span>
+            </div>
+            <div class="progress-bar">
+              <div id="progress-fill" class="progress-fill"></div>
+            </div>
+          </div>
+          
           <div class="scan-warning">
             <span class="warning-icon">⚠️</span>
             <div class="warning-content">

@@ -8,7 +8,7 @@ export class LLMAnalyzer {
     this.settings = settings;
   }
 
-  async analyzeRawPageData(rawData: RawPageData): Promise<LLMAnalysis> {
+  async analyzeRawPageData(rawData: RawPageData, useFullPageScreenshots: boolean = false): Promise<LLMAnalysis> {
     const systemMessage = `You are a $10,000/day Senior Conversion Rate Optimization Consultant with 20+ years of experience across ALL industries. You've optimized pages for Fortune 500 companies and generated millions in additional revenue through conversion optimization.
 
 YOUR EXPERTISE AREAS:
@@ -209,26 +209,74 @@ STAR RATING CRITERIA:
 
     // Call appropriate API based on provider
     let content: string;
+    console.log('LLM Analysis starting - Provider:', this.settings.provider, 'Full Page:', useFullPageScreenshots);
+    
     if (this.settings.provider === 'gemini') {
-      // Capture screenshot for visual analysis with Gemini
+      // Capture screenshot(s) for visual analysis with Gemini
       try {
-        const screenshot = await ScreenshotCapture.captureActiveTab();
-        const compressedScreenshot = await ScreenshotCapture.compressIfNeeded(screenshot);
-        content = await this.callGeminiAPIWithImage(systemMessage, userMessage, compressedScreenshot);
+        if (useFullPageScreenshots) {
+          console.log('Starting full-page screenshot capture for Gemini...');
+          const screenshotResult = await ScreenshotCapture.captureFullPage({
+            maxScreenshots: 12,
+            scrollDelay: 500,
+            progressCallback: (current, total) => {
+              console.log(`Capturing screenshot ${current}/${total}`);
+              // Send progress to popup if available
+              if (typeof chrome !== 'undefined' && chrome.runtime) {
+                chrome.runtime.sendMessage({
+                  type: 'screenshot-progress',
+                  current,
+                  total
+                }).catch(() => {
+                  // Ignore errors if popup is closed
+                });
+              }
+            }
+          });
+          console.log('Full-page screenshots captured:', screenshotResult.totalCaptured, 'total size:', Math.round(screenshotResult.totalSize / 1024 / 1024) + 'MB');
+          content = await this.callGeminiAPIWithMultipleImages(systemMessage, userMessage, screenshotResult.screenshots);
+        } else {
+          const screenshot = await ScreenshotCapture.captureActiveTab();
+          const compressedScreenshot = await ScreenshotCapture.compressIfNeeded(screenshot);
+          content = await this.callGeminiAPIWithImage(systemMessage, userMessage, compressedScreenshot);
+        }
       } catch (screenshotError) {
         console.warn('Screenshot capture failed, falling back to text-only analysis:', screenshotError);
         content = await this.callGeminiAPI(systemMessage, userMessage);
       }
     } else {
-      // OpenAI - Check if model supports vision and capture screenshot
+      // OpenAI - Check if model supports vision and capture screenshot(s)
       const modelName = this.settings.openaiModel;
       const supportsVision = modelName.includes('gpt-4') || modelName.startsWith('gpt-5');
       
       if (supportsVision) {
         try {
-          const screenshot = await ScreenshotCapture.captureActiveTab();
-          const compressedScreenshot = await ScreenshotCapture.compressIfNeeded(screenshot);
-          content = await this.callOpenAIAPIWithImage(systemMessage, userMessage, compressedScreenshot);
+          if (useFullPageScreenshots) {
+            console.log('Starting full-page screenshot capture for OpenAI...');
+            const screenshotResult = await ScreenshotCapture.captureFullPage({
+              maxScreenshots: 12,
+              scrollDelay: 500,
+              progressCallback: (current, total) => {
+                console.log(`Capturing screenshot ${current}/${total}`);
+                // Send progress to popup if available
+                if (typeof chrome !== 'undefined' && chrome.runtime) {
+                  chrome.runtime.sendMessage({
+                    type: 'screenshot-progress',
+                    current,
+                    total
+                  }).catch(() => {
+                    // Ignore errors if popup is closed
+                  });
+                }
+              }
+            });
+            console.log('Full-page screenshots captured for OpenAI:', screenshotResult.totalCaptured, 'total size:', Math.round(screenshotResult.totalSize / 1024 / 1024) + 'MB');
+            content = await this.callOpenAIAPIWithMultipleImages(systemMessage, userMessage, screenshotResult.screenshots);
+          } else {
+            const screenshot = await ScreenshotCapture.captureActiveTab();
+            const compressedScreenshot = await ScreenshotCapture.compressIfNeeded(screenshot);
+            content = await this.callOpenAIAPIWithImage(systemMessage, userMessage, compressedScreenshot);
+          }
         } catch (screenshotError) {
           console.warn('Screenshot capture failed, falling back to text-only analysis:', screenshotError);
           content = await this.callOpenAIAPI(systemMessage, userMessage);
@@ -238,7 +286,10 @@ STAR RATING CRITERIA:
       }
     }
 
-    if (!content) {
+    console.log('LLM API Response content length:', content?.length);
+    console.log('LLM API Response preview:', content?.substring(0, 500));
+    
+    if (!content || content.trim() === '') {
       throw new Error('No response content from LLM');
     }
 
@@ -305,14 +356,17 @@ STAR RATING CRITERIA:
 
     // Configure parameters based on model
     if (modelName.startsWith('gpt-5')) {
-      // GPT-5 models only support default temperature (1) - don't set custom temperature
+      // GPT-5 models use max_completion_tokens and default temperature
+      requestBody.max_completion_tokens = 8192;
       requestBody.response_format = { type: 'json_object' };
     } else if (modelName.includes('gpt-4') || modelName.includes('gpt-3.5')) {
-      // GPT-4 and older models support custom temperature
+      // GPT-4 and older models use max_tokens and support custom temperature
+      requestBody.max_tokens = 8192;
       requestBody.temperature = 0.3;
       requestBody.response_format = { type: 'json_object' };
     } else {
       // Fallback for any other models
+      requestBody.max_tokens = 8192;
       requestBody.temperature = 0.3;
       requestBody.response_format = { type: 'json_object' };
     }
@@ -332,7 +386,26 @@ STAR RATING CRITERIA:
     }
 
     const data = await response.json();
-    return data.choices?.[0]?.message?.content || '';
+    console.log('OpenAI API response structure:', {
+      choices: data.choices?.length || 0,
+      hasMessage: !!data.choices?.[0]?.message,
+      hasContent: !!data.choices?.[0]?.message?.content,
+      error: data.error
+    });
+    
+    if (data.error) {
+      console.error('OpenAI API Error:', data.error);
+      throw new Error(`OpenAI API Error: ${data.error.message || 'Unknown error'}`);
+    }
+    
+    const content = data.choices?.[0]?.message?.content || '';
+    console.log('Extracted content length:', content.length);
+    
+    if (content.length === 0) {
+      console.error('Empty content from OpenAI. Full response:', JSON.stringify(data, null, 2));
+    }
+    
+    return content;
   }
 
   private async callOpenAIAPIWithImage(systemMessage: string, userMessage: string, screenshot: string): Promise<string> {
@@ -389,14 +462,17 @@ IMPORTANT: Use both the screenshot and text content to provide a comprehensive a
 
     // Configure parameters based on model
     if (modelName.startsWith('gpt-5')) {
-      // GPT-5 models only support default temperature (1) - don't set custom temperature
+      // GPT-5 models use max_completion_tokens and default temperature
+      requestBody.max_completion_tokens = 8192;
       requestBody.response_format = { type: 'json_object' };
     } else if (modelName.includes('gpt-4') || modelName.includes('gpt-3.5')) {
-      // GPT-4 and older models support custom temperature
+      // GPT-4 and older models use max_tokens and support custom temperature
+      requestBody.max_tokens = 8192;
       requestBody.temperature = 0.3;
       requestBody.response_format = { type: 'json_object' };
     } else {
       // Fallback for any other models
+      requestBody.max_tokens = 8192;
       requestBody.temperature = 0.3;
       requestBody.response_format = { type: 'json_object' };
     }
@@ -416,7 +492,26 @@ IMPORTANT: Use both the screenshot and text content to provide a comprehensive a
     }
 
     const data = await response.json();
-    return data.choices?.[0]?.message?.content || '';
+    console.log('OpenAI API response structure:', {
+      choices: data.choices?.length || 0,
+      hasMessage: !!data.choices?.[0]?.message,
+      hasContent: !!data.choices?.[0]?.message?.content,
+      error: data.error
+    });
+    
+    if (data.error) {
+      console.error('OpenAI API Error:', data.error);
+      throw new Error(`OpenAI API Error: ${data.error.message || 'Unknown error'}`);
+    }
+    
+    const content = data.choices?.[0]?.message?.content || '';
+    console.log('Extracted content length:', content.length);
+    
+    if (content.length === 0) {
+      console.error('Empty content from OpenAI. Full response:', JSON.stringify(data, null, 2));
+    }
+    
+    return content;
   }
 
   private async callGeminiAPI(systemMessage: string, userMessage: string): Promise<string> {
@@ -453,7 +548,27 @@ IMPORTANT: Use both the screenshot and text content to provide a comprehensive a
     }
 
     const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    console.log('Gemini API response structure:', {
+      candidates: data.candidates?.length || 0,
+      hasContent: !!data.candidates?.[0]?.content,
+      hasParts: !!data.candidates?.[0]?.content?.parts,
+      hasText: !!data.candidates?.[0]?.content?.parts?.[0]?.text,
+      error: data.error
+    });
+    
+    if (data.error) {
+      console.error('Gemini API Error:', data.error);
+      throw new Error(`Gemini API Error: ${data.error.message || 'Unknown error'}`);
+    }
+    
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    console.log('Extracted content length:', content.length);
+    
+    if (content.length === 0) {
+      console.error('Empty content from Gemini. Full response:', JSON.stringify(data, null, 2));
+    }
+    
+    return content;
   }
 
   private async callGeminiAPIWithImage(systemMessage: string, userMessage: string, screenshot: string): Promise<string> {
@@ -521,7 +636,27 @@ IMPORTANT: Use both the screenshot and text content to provide a comprehensive a
     }
 
     const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    console.log('Gemini API response structure:', {
+      candidates: data.candidates?.length || 0,
+      hasContent: !!data.candidates?.[0]?.content,
+      hasParts: !!data.candidates?.[0]?.content?.parts,
+      hasText: !!data.candidates?.[0]?.content?.parts?.[0]?.text,
+      error: data.error
+    });
+    
+    if (data.error) {
+      console.error('Gemini API Error:', data.error);
+      throw new Error(`Gemini API Error: ${data.error.message || 'Unknown error'}`);
+    }
+    
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    console.log('Extracted content length:', content.length);
+    
+    if (content.length === 0) {
+      console.error('Empty content from Gemini. Full response:', JSON.stringify(data, null, 2));
+    }
+    
+    return content;
   }
 
   private validateTopFixes(fixes: any): any[] {
@@ -560,5 +695,250 @@ IMPORTANT: Use both the screenshot and text content to provide a comprehensive a
       result: ['pass', 'fail', 'neutral'].includes(item.result) ? item.result : 'neutral',
       note: item.note || 'No details available'
     }));
+  }
+
+  /**
+   * Call OpenAI API with multiple screenshots for full page analysis
+   */
+  private async callOpenAIAPIWithMultipleImages(systemMessage: string, userMessage: string, screenshots: string[]): Promise<string> {
+    console.log('callOpenAIAPIWithMultipleImages called with', screenshots.length, 'screenshots');
+    
+    // Calculate total request size
+    const totalSize = screenshots.reduce((sum, screenshot) => sum + screenshot.length, 0);
+    console.log('Total screenshots size:', Math.round(totalSize / 1024 / 1024), 'MB');
+    const modelName = this.settings.openaiModel;
+    const apiKey = this.settings.openaiApiKey;
+
+    // Enhanced prompt for full page visual analysis
+    const fullPageAnalysisPrompt = `${systemMessage}
+
+ENHANCED FULL-PAGE VISUAL ANALYSIS CAPABILITIES:
+You now have access to ${screenshots.length} sequential screenshots of the complete landing page. These screenshots are captured from top to bottom, covering the entire page content. This enables comprehensive full-page visual + content analysis.
+
+FULL-PAGE VISUAL ANALYSIS REQUIREMENTS:
+- Analyze the complete visual hierarchy and user flow from top to bottom
+- Assess how the page guides users through the conversion journey
+- Evaluate visual consistency and design patterns across all sections
+- Check CTA placement and visual prominence throughout the page
+- Identify visual friction points and opportunities across the entire experience
+- Assess mobile responsiveness and touch target sizing across all sections
+- Analyze color scheme effectiveness and brand consistency throughout
+- Evaluate spacing, alignment, and overall visual polish across the full page
+
+SEQUENTIAL SCREENSHOT ANALYSIS:
+- Screenshot 1 shows the top/hero section (above the fold)
+- Screenshots 2-${screenshots.length} show sequential sections moving down the page
+- Each screenshot represents one viewport height of content
+- Analyze the flow and transition between sections
+
+COMPREHENSIVE RECOMMENDATIONS:
+- Provide specific visual improvements for each major section
+- Reference exact visual elements you can see across all screenshots
+- Compare visual hierarchy against conversion best practices for full-page experience
+- Suggest specific improvements for user flow and conversion path optimization
+- Identify sections that need visual strengthening or reorganization
+- Recommend improvements for overall page cohesion and conversion optimization
+
+${userMessage}
+
+IMPORTANT: Use all ${screenshots.length} screenshots to provide a comprehensive full-page analysis that combines complete visual design insights with content strategy recommendations for the entire user journey.`;
+
+    const contentParts: any[] = [
+      {
+        type: 'text',
+        text: fullPageAnalysisPrompt
+      }
+    ];
+
+    // Add all screenshots to the content
+    screenshots.forEach((screenshot, index) => {
+      contentParts.push({
+        type: 'image_url',
+        image_url: {
+          url: `data:image/png;base64,${screenshot}`,
+          detail: 'high'
+        }
+      });
+    });
+
+    const requestBody: any = {
+      model: modelName,
+      messages: [
+        { 
+          role: 'user', 
+          content: contentParts
+        }
+      ]
+    };
+
+    // Configure parameters based on model type
+    if (modelName.startsWith('gpt-5')) {
+      // GPT-5 models use max_completion_tokens and default temperature
+      requestBody.max_completion_tokens = 8192;
+      requestBody.response_format = { type: 'json_object' };
+    } else if (modelName.includes('gpt-4') || modelName.includes('gpt-3.5')) {
+      // GPT-4 and older models use max_tokens and support custom temperature
+      requestBody.max_tokens = 8192;
+      requestBody.temperature = 0.3;
+      requestBody.response_format = { type: 'json_object' };
+    } else {
+      // Fallback for other models
+      requestBody.max_tokens = 8192;
+      requestBody.temperature = 0.3;
+    }
+
+    console.log('Making OpenAI API request with:', {
+      model: requestBody.model,
+      messageCount: requestBody.messages.length,
+      contentPartsCount: requestBody.messages[0].content.length,
+      maxTokens: requestBody.max_tokens || requestBody.max_completion_tokens,
+      temperature: requestBody.temperature
+    });
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log('OpenAI API response structure:', {
+      choices: data.choices?.length || 0,
+      hasMessage: !!data.choices?.[0]?.message,
+      hasContent: !!data.choices?.[0]?.message?.content,
+      error: data.error
+    });
+    
+    if (data.error) {
+      console.error('OpenAI API Error:', data.error);
+      throw new Error(`OpenAI API Error: ${data.error.message || 'Unknown error'}`);
+    }
+    
+    const content = data.choices?.[0]?.message?.content || '';
+    console.log('Extracted content length:', content.length);
+    
+    if (content.length === 0) {
+      console.error('Empty content from OpenAI. Full response:', JSON.stringify(data, null, 2));
+    }
+    
+    return content;
+  }
+
+  /**
+   * Call Gemini API with multiple screenshots for full page analysis
+   */
+  private async callGeminiAPIWithMultipleImages(systemMessage: string, userMessage: string, screenshots: string[]): Promise<string> {
+    console.log('callGeminiAPIWithMultipleImages called with', screenshots.length, 'screenshots');
+    
+    // Calculate total request size
+    const totalSize = screenshots.reduce((sum, screenshot) => sum + screenshot.length, 0);
+    console.log('Total screenshots size:', Math.round(totalSize / 1024 / 1024), 'MB');
+    const modelName = this.settings.geminiModel;
+    const apiKey = this.settings.geminiApiKey;
+
+    // Enhanced prompt for full page visual analysis
+    const fullPageAnalysisPrompt = `${systemMessage}
+
+ENHANCED FULL-PAGE VISUAL ANALYSIS CAPABILITIES:
+You now have access to ${screenshots.length} sequential screenshots of the complete landing page. These screenshots are captured from top to bottom, covering the entire page content. This enables comprehensive full-page visual + content analysis.
+
+FULL-PAGE VISUAL ANALYSIS REQUIREMENTS:
+- Analyze the complete visual hierarchy and user flow from top to bottom
+- Assess how the page guides users through the conversion journey
+- Evaluate visual consistency and design patterns across all sections
+- Check CTA placement and visual prominence throughout the page
+- Identify visual friction points and opportunities across the entire experience
+- Assess mobile responsiveness and touch target sizing across all sections
+- Analyze color scheme effectiveness and brand consistency throughout
+- Evaluate spacing, alignment, and overall visual polish across the full page
+
+SEQUENTIAL SCREENSHOT ANALYSIS:
+- Screenshot 1 shows the top/hero section (above the fold)
+- Screenshots 2-${screenshots.length} show sequential sections moving down the page
+- Each screenshot represents one viewport height of content
+- Analyze the flow and transition between sections
+
+COMPREHENSIVE RECOMMENDATIONS:
+- Provide specific visual improvements for each major section
+- Reference exact visual elements you can see across all screenshots
+- Compare visual hierarchy against conversion best practices for full-page experience
+- Suggest specific improvements for user flow and conversion path optimization
+- Identify sections that need visual strengthening or reorganization
+- Recommend improvements for overall page cohesion and conversion optimization
+
+${userMessage}
+
+IMPORTANT: Use all ${screenshots.length} screenshots to provide a comprehensive full-page analysis that combines complete visual design insights with content strategy recommendations for the entire user journey.`;
+
+    const parts: any[] = [
+      {
+        text: fullPageAnalysisPrompt
+      }
+    ];
+
+    // Add all screenshots to the parts
+    screenshots.forEach((screenshot, index) => {
+      parts.push({
+        inline_data: {
+          mime_type: "image/png",
+          data: screenshot
+        }
+      });
+    });
+
+    const requestBody = {
+      contents: [{
+        parts: parts
+      }],
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 8192,
+        responseMimeType: "application/json"
+      }
+    };
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log('Gemini API response structure:', {
+      candidates: data.candidates?.length || 0,
+      hasContent: !!data.candidates?.[0]?.content,
+      hasParts: !!data.candidates?.[0]?.content?.parts,
+      hasText: !!data.candidates?.[0]?.content?.parts?.[0]?.text,
+      error: data.error
+    });
+    
+    if (data.error) {
+      console.error('Gemini API Error:', data.error);
+      throw new Error(`Gemini API Error: ${data.error.message || 'Unknown error'}`);
+    }
+    
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    console.log('Extracted content length:', content.length);
+    
+    if (content.length === 0) {
+      console.error('Empty content from Gemini. Full response:', JSON.stringify(data, null, 2));
+    }
+    
+    return content;
   }
 }

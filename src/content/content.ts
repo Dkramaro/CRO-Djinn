@@ -1,12 +1,17 @@
 import { scrapePage } from './scraper';
 
-// Message listener for popup communications
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'scrapePage') {
-    handleScrapeRequest(sendResponse);
-    return true; // Keep the message channel open for async response
-  }
-});
+// Prevent multiple injections
+if (!(window as any).__croGenieContentScriptLoaded) {
+  (window as any).__croGenieContentScriptLoaded = true;
+
+  // Message listener for popup communications
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'scrapePage') {
+      handleScrapeRequest(sendResponse);
+      return true; // Keep the message channel open for async response
+    }
+  });
+}
 
 async function handleScrapeRequest(sendResponse: (response: any) => void): Promise<void> {
   try {

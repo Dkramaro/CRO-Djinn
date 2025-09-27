@@ -1,3 +1,17 @@
+export interface ScreenshotCaptureOptions {
+  fullPage?: boolean;
+  maxScreenshots?: number;
+  scrollDelay?: number;
+  progressCallback?: (current: number, total: number) => void;
+}
+
+export interface ScreenshotResult {
+  screenshots: string[];
+  totalCaptured: number;
+  totalSize: number;
+  compressed: boolean;
+}
+
 export class ScreenshotCapture {
   /**
    * Captures a screenshot of the current active tab
@@ -24,6 +38,181 @@ export class ScreenshotCapture {
     } catch (error) {
       console.error('Screenshot capture failed:', error);
       throw new Error(`Failed to capture screenshot: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Captures multiple screenshots of the full page by scrolling systematically
+   * @param options Configuration options for full page capture
+   * @returns Promise<ScreenshotResult> Array of base64 screenshots and metadata
+   */
+  static async captureFullPage(options: ScreenshotCaptureOptions = {}): Promise<ScreenshotResult> {
+    const {
+      maxScreenshots = 12,
+      scrollDelay = 500,
+      progressCallback
+    } = options;
+
+    try {
+      // Get the current active tab
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tabs[0]?.id) {
+        throw new Error('No active tab found');
+      }
+
+      const tabId = tabs[0].id;
+      const windowId = tabs[0].windowId;
+
+      console.log('Starting full page capture for tab:', tabId);
+
+      // Simple approach: Get dimensions without injecting complex scripts
+      const pageInfo = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: () => {
+          const vh = window.innerHeight;
+          const th = Math.max(
+            document.body.scrollHeight || 0,
+            document.body.offsetHeight || 0,
+            document.documentElement.clientHeight || 0,
+            document.documentElement.scrollHeight || 0,
+            document.documentElement.offsetHeight || 0
+          );
+          
+          // Set scroll behavior to instant for precise positioning
+          const originalBehavior = document.documentElement.style.scrollBehavior;
+          document.documentElement.style.scrollBehavior = 'auto';
+          
+          return {
+            viewportHeight: vh,
+            totalHeight: th,
+            originalBehavior: originalBehavior
+          };
+        }
+      });
+
+      if (!pageInfo || !pageInfo[0] || !pageInfo[0].result) {
+        throw new Error('Cannot get page dimensions');
+      }
+
+      const { viewportHeight, totalHeight } = pageInfo[0].result;
+      
+      console.log('Page info:', { viewportHeight, totalHeight });
+
+      // Calculate screenshots needed
+      const screenshotsNeeded = Math.min(
+        Math.ceil(totalHeight / viewportHeight),
+        maxScreenshots
+      );
+
+      console.log('Screenshots needed:', screenshotsNeeded);
+
+      const screenshots: string[] = [];
+      let totalSize = 0;
+      let anyCompressed = false;
+
+      // Scroll to top first
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        func: () => {
+          window.scrollTo({ top: 0, behavior: 'instant' });
+        }
+      });
+
+      await this.delay(scrollDelay);
+
+      // Capture screenshots sequentially
+      for (let i = 0; i < screenshotsNeeded; i++) {
+        console.log(`Capturing screenshot ${i + 1}/${screenshotsNeeded}`);
+        progressCallback?.(i + 1, screenshotsNeeded);
+
+        const scrollTop = i * viewportHeight;
+
+        // Scroll to position
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          func: (scrollY) => {
+            window.scrollTo({ top: scrollY, behavior: 'instant' });
+          },
+          args: [scrollTop]
+        });
+
+        // Wait for content to load
+        await this.delay(scrollDelay);
+
+        // Capture screenshot
+        const dataUrl = await chrome.tabs.captureVisibleTab(windowId, {
+          format: 'png',
+          quality: 85
+        });
+
+        const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
+        
+        // Check size and compress if needed (reduced from 2MB to 1.5MB for 25% more compression)
+        const originalSize = this.getEstimatedSize(base64Data);
+        let finalScreenshot = base64Data;
+        
+        const compressionLimit = Math.floor(2 * 1024 * 1024 * 0.75); // 25% more compression
+        if (originalSize > compressionLimit) {
+          finalScreenshot = await this.compressIfNeeded(base64Data, compressionLimit);
+          anyCompressed = true;
+        } else {
+          // Apply additional 25% compression even if under the limit
+          finalScreenshot = await this.compressIfNeeded(base64Data, Math.floor(originalSize * 0.75));
+          anyCompressed = true;
+        }
+
+        screenshots.push(finalScreenshot);
+        totalSize += this.getEstimatedSize(finalScreenshot);
+
+        // Check total size limit
+        if (totalSize > 18 * 1024 * 1024) {
+          console.warn(`Stopping at screenshot ${i + 1} due to size limit`);
+          break;
+        }
+
+        // Check if we've reached the bottom
+        const scrollCheck = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: () => {
+            const currentScrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const currentViewportHeight = window.innerHeight;
+            const currentTotalHeight = Math.max(
+              document.body.scrollHeight || 0,
+              document.documentElement.scrollHeight || 0
+            );
+            
+            return {
+              isAtBottom: currentScrollTop + currentViewportHeight >= currentTotalHeight - 50
+            };
+          }
+        });
+
+        if (scrollCheck?.[0]?.result?.isAtBottom) {
+          console.log(`Reached bottom at screenshot ${i + 1}`);
+          break;
+        }
+      }
+
+      // Reset scroll to top
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        func: () => {
+          window.scrollTo({ top: 0, behavior: 'instant' });
+        }
+      });
+
+      console.log(`Captured ${screenshots.length} screenshots, total size: ${Math.round(totalSize / 1024 / 1024)}MB`);
+
+      return {
+        screenshots,
+        totalCaptured: screenshots.length,
+        totalSize,
+        compressed: anyCompressed
+      };
+
+    } catch (error) {
+      console.error('Full page screenshot capture failed:', error);
+      throw new Error(`Screenshot capture failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -91,4 +280,13 @@ export class ScreenshotCapture {
       return base64Data;
     }
   }
+
+  /**
+   * Helper function to delay execution
+   * @param ms Milliseconds to delay
+   */
+  private static delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
 }
