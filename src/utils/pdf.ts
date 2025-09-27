@@ -322,6 +322,9 @@ export class PDFExporter {
   private addStrengthsWeaknessesSection(pageSummary: any): void {
     // Start a new page for Strengths & Weaknesses
     this.addNewPage();
+    
+    // Modern header with gradient-like effect (matching other sections)
+    this.yPosition += 2;
     this.addSectionHeaderProfessional('Strengths & Weaknesses Analysis');
     
     if (!pageSummary.keyStrengths && !pageSummary.criticalWeaknesses) {
@@ -332,140 +335,244 @@ export class PDFExporter {
       return;
     }
 
-    // Use full page width for better layout
-    const safeColumnGap = 20;
-    const totalContentWidth = this.pageWidth - (2 * this.margin) - safeColumnGap;
-    const columnWidth = totalContentWidth / 2;
-    const leftCol = this.margin;
-    const rightCol = this.margin + columnWidth + safeColumnGap;
-    
-    // Calculate heights properly to prevent overlap
-    const strengthsHeight = pageSummary.keyStrengths ? 
-      this.calculateListHeight(pageSummary.keyStrengths, columnWidth - 26) : 0;
-    const weaknessHeight = pageSummary.criticalWeaknesses ? 
-      this.calculateListHeight(pageSummary.criticalWeaknesses, columnWidth - 26) : 0;
-    const maxColumnHeight = Math.max(strengthsHeight, weaknessHeight) + 40; // Extra padding for full page
-    
-    // Strengths column with enhanced styling for dedicated page
+    // Process Strengths first
     if (pageSummary.keyStrengths && pageSummary.keyStrengths.length > 0) {
-      this.doc.setFillColor(255, 252, 240); // Very light yellow tint
-      this.doc.roundedRect(leftCol - 8, this.yPosition - 5, columnWidth + 16, maxColumnHeight, 8, 8, 'F');
-      
-      this.doc.setDrawColor(...this.colors.success);
-      this.doc.setLineWidth(1);
-      this.doc.roundedRect(leftCol - 8, this.yPosition - 5, columnWidth + 16, maxColumnHeight, 8, 8, 'S');
-      
-      this.doc.setTextColor(...this.colors.success);
+      // Add "Key Strengths" header in green
+      this.doc.setTextColor(34, 197, 94); // Green color
       this.doc.setFont('helvetica', 'bold');
       this.doc.setFontSize(14);
-      this.doc.text('Key Strengths', leftCol, this.yPosition + 12);
-      
-      let strengthY = this.yPosition + 28;
-      this.doc.setFont('helvetica', 'normal');
-      this.doc.setFontSize(10);
+      this.doc.text('Key Strengths', this.margin, this.yPosition);
+      this.yPosition += 8; // Space after header
       
       pageSummary.keyStrengths.forEach((strength: string, index: number) => {
-        // Numbered bullet for better readability
-        this.doc.setTextColor(...this.colors.success);
-        this.doc.setFont('helvetica', 'bold');
-        this.doc.text(`${index + 1}.`, leftCol + 5, strengthY);
+        // Calculate text width for content
+        const safeTextWidth = this.pageWidth - (2 * this.margin) - 20;
         
-        // Text content with proper wrapping
-        this.doc.setTextColor(...this.colors.text);
+        // Store starting position for dynamic height calculation
+        const cardStartY = this.yPosition;
+        
+        // First, calculate the height by simulating content placement
+        let calculatedHeight = 3; // Top padding
+        
+        // Calculate text height for the strength item
+        const cleanStrength = this.sanitizeTextForPDF(strength);
+        const wrappedStrength = this.wrapText(cleanStrength, safeTextWidth - 10);
+        calculatedHeight += (wrappedStrength.length * 4) + 2;
+        
+        calculatedHeight += 1; // Bottom buffer
+        
+        // Draw container first with calculated height (green styling for strengths)
+        this.doc.setFillColor(248, 255, 248); // Very light green tint
+        this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'F');
+        
+        this.doc.setDrawColor(144, 238, 144); // Light green border
+        this.doc.setLineWidth(0.3);
+        this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'S');
+        
+        // Green vertical accent bar on the left (for strengths)
+        this.doc.setFillColor(34, 197, 94); // Green color
+        this.doc.roundedRect(this.margin - 2, this.yPosition - 1, 4, calculatedHeight, 0, 0, 'F');
+        
+        // Now add text content on top of the container
+        // Strength text (the actual content)
+        this.doc.setTextColor(0, 0, 0); // Black text for visibility
         this.doc.setFont('helvetica', 'normal');
-        const wrappedText = this.wrapText(strength, columnWidth - 26);
-        wrappedText.forEach((line, lineIndex) => {
-          this.doc.text(line, leftCol + 15, strengthY);
-          if (lineIndex < wrappedText.length - 1) {
-            strengthY += 6;
-          }
+        this.doc.setFontSize(10);
+        const strengthCleanText = this.sanitizeTextForPDF(strength);
+        const strengthWrappedText = this.wrapText(strengthCleanText, safeTextWidth - 10);
+        
+        let textY = this.yPosition + 5; // Better vertical alignment - more space from card top
+        strengthWrappedText.forEach((line, lineIndex) => {
+          const cleanLine = this.sanitizeTextForPDF(line);
+          this.doc.setCharSpace(0);
+          this.doc.setFont('helvetica', 'normal');
+          this.doc.setFontSize(10);
+          this.doc.setTextColor(0, 0, 0); // Ensure black text
+          
+          // Preserve important characters by using a more selective approach
+          const safeLine = cleanLine.replace(/[^\x20-\x7E]/g, ''); // Only remove non-printable characters
+          this.doc.text(safeLine, this.margin + 8, textY); // Better horizontal alignment - more space from vertical bar
+          textY += 4.5; // Slightly more line spacing for better readability
         });
-        strengthY += 12; // More spacing between items for dedicated page
+        
+        // Move to next card position
+        this.yPosition = cardStartY + calculatedHeight + 5; // Spacing between cards
       });
     }
     
-    // Weaknesses column with enhanced styling for dedicated page
+    // Process Issues/Weaknesses second
     if (pageSummary.criticalWeaknesses && pageSummary.criticalWeaknesses.length > 0) {
-      this.doc.setFillColor(252, 248, 255); // Very light purple tint
-      this.doc.roundedRect(rightCol - 8, this.yPosition - 5, columnWidth + 16, maxColumnHeight, 8, 8, 'F');
+      // Add extra spacing before Critical Issues section for prominence
+      this.yPosition += 15; // More space from Key Strengths section
       
-      this.doc.setDrawColor(...this.colors.primary);
-      this.doc.setLineWidth(1);
-      this.doc.roundedRect(rightCol - 8, this.yPosition - 5, columnWidth + 16, maxColumnHeight, 8, 8, 'S');
-      
-      this.doc.setTextColor(...this.colors.danger);
+      // Add "Critical Issues" header with visual prominence
+      this.doc.setTextColor(239, 68, 68); // Red color
       this.doc.setFont('helvetica', 'bold');
-      this.doc.setFontSize(14);
-      this.doc.text('Critical Issues', rightCol, this.yPosition + 12);
+      this.doc.setFontSize(16); // Larger font size for prominence
       
-      let weaknessY = this.yPosition + 28;
-      this.doc.setFont('helvetica', 'normal');
-      this.doc.setFontSize(10);
+      // Add a subtle background highlight for the header
+      const headerText = 'Critical Issues';
+      const headerWidth = this.doc.getTextWidth(headerText);
+      this.doc.setFillColor(255, 248, 248); // Very light red background
+      this.doc.roundedRect(this.margin - 4, this.yPosition - 2, headerWidth + 8, 8, 2, 2, 'F');
+      
+      // Draw the header text
+      this.doc.text(headerText, this.margin, this.yPosition + 2);
+      this.yPosition += 12; // More space after header
       
       pageSummary.criticalWeaknesses.forEach((weakness: string, index: number) => {
-        // Numbered bullet for better readability
-        this.doc.setTextColor(...this.colors.danger);
-        this.doc.setFont('helvetica', 'bold');
-        this.doc.text(`${index + 1}.`, rightCol + 5, weaknessY);
+        // Calculate text width for content
+        const safeTextWidth = this.pageWidth - (2 * this.margin) - 20;
         
-        // Text content with proper wrapping
-        this.doc.setTextColor(...this.colors.text);
+        // Store starting position for dynamic height calculation
+        const cardStartY = this.yPosition;
+        
+        // First, calculate the height by simulating content placement
+        let calculatedHeight = 3; // Top padding
+        
+        // Calculate text height for the weakness item
+        const cleanWeakness = this.sanitizeTextForPDF(weakness);
+        const wrappedWeakness = this.wrapText(cleanWeakness, safeTextWidth - 10);
+        calculatedHeight += (wrappedWeakness.length * 4) + 2;
+        
+        calculatedHeight += 1; // Bottom buffer
+        
+        // Draw container first with calculated height (red styling for issues)
+        this.doc.setFillColor(255, 248, 248); // Very light red tint
+        this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'F');
+        
+        this.doc.setDrawColor(252, 165, 165); // Light red border
+        this.doc.setLineWidth(0.3);
+        this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'S');
+        
+        // Red vertical accent bar on the left (for issues)
+        this.doc.setFillColor(239, 68, 68); // Red color
+        this.doc.roundedRect(this.margin - 2, this.yPosition - 1, 4, calculatedHeight, 0, 0, 'F');
+        
+        // Now add text content on top of the container
+        // Weakness text (the actual content)
+        this.doc.setTextColor(0, 0, 0); // Black text for visibility
         this.doc.setFont('helvetica', 'normal');
-        const wrappedText = this.wrapText(weakness, columnWidth - 26);
-        wrappedText.forEach((line, lineIndex) => {
-          this.doc.text(line, rightCol + 15, weaknessY);
-          if (lineIndex < wrappedText.length - 1) {
-            weaknessY += 6;
-          }
+        this.doc.setFontSize(10);
+        const weaknessCleanText = this.sanitizeTextForPDF(weakness);
+        const weaknessWrappedText = this.wrapText(weaknessCleanText, safeTextWidth - 10);
+        
+        let textY = this.yPosition + 5; // Better vertical alignment - more space from card top
+        weaknessWrappedText.forEach((line, lineIndex) => {
+          const cleanLine = this.sanitizeTextForPDF(line);
+          this.doc.setCharSpace(0);
+          this.doc.setFont('helvetica', 'normal');
+          this.doc.setFontSize(10);
+          this.doc.setTextColor(0, 0, 0); // Ensure black text
+          
+          // Preserve important characters by using a more selective approach
+          const safeLine = cleanLine.replace(/[^\x20-\x7E]/g, ''); // Only remove non-printable characters
+          this.doc.text(safeLine, this.margin + 8, textY); // Better horizontal alignment - more space from vertical bar
+          textY += 4.5; // Slightly more line spacing for better readability
         });
-        weaknessY += 12; // More spacing between items for dedicated page
+        
+        // Move to next card position
+        this.yPosition = cardStartY + calculatedHeight + 5; // Spacing between cards
       });
     }
     
-    // Move past both columns
-    this.yPosition += maxColumnHeight + 20;
+    this.yPosition += 5;
   }
 
   private addExecutiveSummarySection(summary: string[]): void {
+    // Start a new page for Executive Summary to match Copy Suggestions
+    this.addNewPage();
+    
+    // Modern header with gradient-like effect (matching Copy Suggestions)
+    this.yPosition += 2;
     this.addSectionHeaderProfessional('Executive Summary');
     
-    summary.forEach((item) => {
-      // Calculate compact item height with optimized text width
-      const safeTextWidth = this.pageWidth - (2 * this.margin) - 20; // Further reduced since no bullet point
-      const itemHeight = this.calculateTextHeight(item, safeTextWidth);
-      const containerHeight = itemHeight + 8; // Reduced padding for container
+    summary.forEach((item, index) => {
+      // Calculate text width for content
+      const safeTextWidth = this.pageWidth - (2 * this.margin) - 20;
       
-      // Check for page break
-      this.checkNewPage(containerHeight + 5);
+      // Store starting position for dynamic height calculation
+      const cardStartY = this.yPosition;
       
-      // Compact background for each summary item
-      this.doc.setFillColor(252, 248, 255); // Very light purple tint
-      this.doc.roundedRect(this.margin - 6, this.yPosition - 3, this.pageWidth - (2 * this.margin) + 12, containerHeight, 3, 3, 'F');
+      // First, calculate the height by simulating content placement
+      let calculatedHeight = 0; // Start with no padding
       
-      // Left accent border
+      // Calculate text height for the summary item
+      const cleanItem = this.sanitizeTextForPDF(item);
+      const wrappedItem = this.wrapText(cleanItem, safeTextWidth - 10);
+      
+      // Match the actual text rendering: starts at +3, uses 4.2pt line spacing
+      calculatedHeight += 3; // Text starts 3pt from card top
+      calculatedHeight += (wrappedItem.length * 4.2); // 4.2pt line spacing
+      calculatedHeight += 3; // Bottom padding to match top padding
+      
+      // Draw container first with calculated height (matching Copy Suggestions)
+      this.doc.setFillColor(255, 255, 255);
+      this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'F');
+      
+      this.doc.setDrawColor(220, 220, 220);
+      this.doc.setLineWidth(0.3);
+      this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'S');
+      
+      // Purple vertical accent bar on the left (matching Copy Suggestions)
       this.doc.setFillColor(...this.colors.primary);
-      this.doc.rect(this.margin - 6, this.yPosition - 3, 3, containerHeight, 'F');
+      this.doc.roundedRect(this.margin - 2, this.yPosition - 1, 4, calculatedHeight, 0, 0, 'F');
       
-      // Store starting Y for content
-      const contentStartY = this.yPosition + 3;
-      
-      // Content with optimized wrapping and positioning (no bullet needed - vertical bar provides visual separation)
-      this.doc.setTextColor(...this.colors.text);
+      // Now add text content on top of the container
+      // Summary text (the actual content)
+      this.doc.setTextColor(0, 0, 0); // Black text for visibility
       this.doc.setFont('helvetica', 'normal');
       this.doc.setFontSize(10);
-      const wrappedText = this.wrapText(item, safeTextWidth);
+      const summaryCleanItem = this.sanitizeTextForPDF(item);
+      const summaryWrappedItem = this.wrapText(summaryCleanItem, safeTextWidth - 10);
       
-      let textY = contentStartY;
-      wrappedText.forEach((line) => {
-        this.doc.text(line, this.margin + 8, textY); // Reduced indentation since no bullet
-        textY += 4; // Reduced line spacing
+      let textY = this.yPosition + 3; // Start text below the card top
+      summaryWrappedItem.forEach((line, lineIndex) => {
+        const cleanLine = this.sanitizeTextForPDF(line);
+        this.doc.setCharSpace(0);
+        
+        // Preserve important characters by using a more selective approach
+        const safeLine = cleanLine.replace(/[^\x20-\x7E]/g, ''); // Only remove non-printable characters
+        
+        // Check if this line contains a label (text ending with ":")
+        const labelMatch = safeLine.match(/^([^:]+:)\s*(.*)$/);
+        
+        if (labelMatch) {
+          // Split into label and content
+          const label = labelMatch[1]; // e.g., "Context:"
+          const content = labelMatch[2]; // e.g., "Direct-to-consumer telehealth homepage..."
+          
+          // Draw label in purple
+          this.doc.setFont('helvetica', 'bold');
+          this.doc.setFontSize(10);
+          this.doc.setTextColor(...this.colors.primary); // Purple color
+          this.doc.text(label, this.margin + 6, textY);
+          
+          // Draw content in black right after the label (if there's content after the colon)
+          if (content.trim()) {
+            // Calculate the width of the label to position content correctly
+            const labelWidth = this.doc.getTextWidth(label);
+            this.doc.setFont('helvetica', 'normal');
+            this.doc.setFontSize(10);
+            this.doc.setTextColor(0, 0, 0); // Black color
+            this.doc.text(content, this.margin + 6 + labelWidth, textY);
+          }
+        } else {
+          // Regular line without label - draw in black
+          this.doc.setFont('helvetica', 'normal');
+          this.doc.setFontSize(10);
+          this.doc.setTextColor(0, 0, 0); // Black color
+          this.doc.text(safeLine, this.margin + 6, textY);
+        }
+        
+        textY += 4.2; // Slightly better line spacing for improved readability
       });
       
-      // Move past container with minimal spacing
-      this.yPosition += containerHeight + 4; // Reduced spacing between items
+      // Move to next card position
+      this.yPosition = cardStartY + calculatedHeight + 5; // Spacing between cards
     });
     
-    this.yPosition += 5; // Reduced final spacing
+    this.yPosition += 5;
   }
 
   private addRecommendationsSection(recommendations: any[]): void {
@@ -651,70 +758,95 @@ export class PDFExporter {
   }
 
   private addCopySuggestionsSection(suggestions: any[]): void {
-    // Minimal spacing before copy suggestions
-    this.yPosition += 8;
+    // Start a new page for Copy Suggestions to match Quick Wins
+    this.addNewPage();
+    
+    // Modern header with gradient-like effect (matching Quick Wins)
+    this.yPosition += 2;
     this.addSectionHeaderProfessional('Copy Suggestions');
     
-    suggestions.forEach((suggestion) => {
-      // Calculate ultra-compact card height
-      const safeTextWidth = this.pageWidth - (2 * this.margin) - 15;
-      const cardHeight = this.calculateCopySuggestionHeightUltraCompact(suggestion, safeTextWidth);
+    suggestions.forEach((suggestion, index) => {
+      // Calculate text width for content
+      const safeTextWidth = this.pageWidth - (2 * this.margin) - 20;
       
-      this.checkNewPage(cardHeight + 5);
-      
-      // Ultra-compact purple card for copy suggestions
-      this.doc.setFillColor(252, 248, 255); // Very light purple tint
-      this.doc.roundedRect(this.margin - 4, this.yPosition - 2, this.pageWidth - (2 * this.margin) + 8, cardHeight, 3, 3, 'F');
-      
-      this.doc.setDrawColor(...this.colors.secondary);
-      this.doc.setLineWidth(0.2);
-      this.doc.roundedRect(this.margin - 4, this.yPosition - 2, this.pageWidth - (2 * this.margin) + 8, cardHeight, 3, 3, 'S');
-      
-      // Store starting position for proper container sizing
+      // Store starting position for dynamic height calculation
       const cardStartY = this.yPosition;
       
-      // Section name with ultra-compact spacing
-      this.doc.setTextColor(...this.colors.secondary);
-      this.doc.setFont('helvetica', 'bold');
-      this.doc.setFontSize(9);
-      const maxSectionWidth = this.pageWidth - (2 * this.margin) - 10;
-      const cleanSection = this.sanitizeTextForPDF(suggestion.section || '');
-      const wrappedSection = this.wrapText(cleanSection, maxSectionWidth);
+      // First, calculate the height by simulating content placement
+      let calculatedHeight = 3; // Top padding
       
-      let sectionY = this.yPosition + 2;
+      // Calculate section name height (e.g., "Title", "Bullet 1", etc.)
+      const cleanSection = this.sanitizeTextForPDF(suggestion.section || '');
+      const wrappedSection = this.wrapText(cleanSection, safeTextWidth - 10);
+      calculatedHeight += (wrappedSection.length * 5) + 2;
+      
+      // Calculate suggestion text height
+      if (suggestion.suggestion) {
+        const cleanSuggestion = this.sanitizeTextForPDF(suggestion.suggestion);
+        const suggestionLines = this.wrapText(cleanSuggestion, safeTextWidth - 10);
+        calculatedHeight += (suggestionLines.length * 4) + 2;
+      }
+      
+      calculatedHeight += 1; // Bottom buffer
+      
+      // Draw container first with calculated height (matching Quick Wins)
+      this.doc.setFillColor(255, 255, 255);
+      this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'F');
+      
+      this.doc.setDrawColor(220, 220, 220);
+      this.doc.setLineWidth(0.3);
+      this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'S');
+      
+      // Purple vertical accent bar on the left (matching Quick Wins)
+      this.doc.setFillColor(...this.colors.primary);
+      this.doc.roundedRect(this.margin - 2, this.yPosition - 1, 4, calculatedHeight, 0, 0, 'F');
+      
+      // Now add text content on top of the container
+      // Section name (e.g., "Title", "Bullet 1") with purple styling
+      this.doc.setTextColor(...this.colors.primary); // Purple text for theme
+      this.doc.setFont('helvetica', 'bold');
+      this.doc.setFontSize(11);
+      
+      let sectionY = this.yPosition + 3;
       wrappedSection.forEach((line) => {
         const cleanLine = this.sanitizeTextForPDF(line);
         this.doc.setCharSpace(0);
         this.doc.setFont('helvetica', 'bold');
-        this.doc.setFontSize(9);
+        this.doc.setFontSize(11);
+        this.doc.setTextColor(...this.colors.primary); // Ensure purple text
         
-        const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%[0-9A-F]{2}/g, '');
-        this.doc.text(encodedLine || cleanLine, this.margin, sectionY);
-        sectionY += 4;
+        // Preserve important characters by using a more selective approach
+        const safeLine = cleanLine.replace(/[^\x20-\x7E]/g, ''); // Only remove non-printable characters
+        this.doc.text(safeLine, this.margin + 6, sectionY);
+        sectionY += 5;
       });
+      
       this.yPosition = sectionY + 2;
       
-      // Suggestion text with ultra-compact spacing
-      this.doc.setTextColor(...this.colors.text);
-      this.doc.setFont('helvetica', 'normal');
-      this.doc.setFontSize(8);
-      const cleanSuggestion = this.sanitizeTextForPDF(suggestion.suggestion || '');
-      const suggestionText = this.wrapText(cleanSuggestion, safeTextWidth);
-      suggestionText.forEach((line) => {
-        const cleanLine = this.sanitizeTextForPDF(line);
-        this.doc.setCharSpace(0);
+      // Suggestion text (the actual copy content)
+      if (suggestion.suggestion) {
+        this.doc.setTextColor(0, 0, 0); // Black text for visibility
         this.doc.setFont('helvetica', 'normal');
-        this.doc.setFontSize(8);
-        
-        const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%[0-9A-F]{2}/g, '');
-        this.doc.text(encodedLine || cleanLine, this.margin + 4, this.yPosition);
-        this.yPosition += 3;
-      });
+        this.doc.setFontSize(10);
+        const cleanSuggestion = this.sanitizeTextForPDF(suggestion.suggestion);
+        const suggestionLines = this.wrapText(cleanSuggestion, safeTextWidth - 10);
+        suggestionLines.forEach((line, lineIndex) => {
+          const cleanLine = this.sanitizeTextForPDF(line);
+          this.doc.setCharSpace(0);
+          this.doc.setFont('helvetica', 'normal');
+          this.doc.setFontSize(10);
+          this.doc.setTextColor(0, 0, 0); // Ensure black text
+          
+          // Preserve important characters like $, +, commas, etc. by using a more selective approach
+          const safeLine = cleanLine.replace(/[^\x20-\x7E]/g, ''); // Only remove non-printable characters
+          this.doc.text(safeLine, this.margin + 6, this.yPosition);
+          this.yPosition += 4;
+        });
+        this.yPosition += 2;
+      }
       
-      // Ultra-minimal spacing between cards
-      const cardEndY = cardStartY + cardHeight + 1;
-      this.yPosition = Math.max(this.yPosition + 1, cardEndY);
-      this.yPosition += 2; // Minimal spacing between cards
+      // Move to next card position
+      this.yPosition = cardStartY + calculatedHeight + 5; // Spacing between cards
     });
     
     this.yPosition += 5;
@@ -787,7 +919,7 @@ export class PDFExporter {
         this.doc.setTextColor(...this.colors.primary); // Ensure purple text
         
         const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%[0-9A-F]{2}/g, '');
-        this.doc.text(encodedLine || cleanLine, this.margin + 6, titleY, { underline: true });
+        this.doc.text(encodedLine || cleanLine, this.margin + 6, titleY);
         titleY += 5;
       });
       
@@ -873,7 +1005,7 @@ export class PDFExporter {
     this.addSectionHeaderProfessional('Visual CRO Analysis');
     
     // Create array of sections to process
-    const sections = [];
+    const sections: Array<{ title: string; data: any }> = [];
     if (visualAnalysis.visualFlow) {
       sections.push({ title: 'Visual Flow Analysis', data: visualAnalysis.visualFlow });
     }
@@ -900,7 +1032,7 @@ export class PDFExporter {
     const cardStartY = this.yPosition;
     
     // Define colors for different sections
-    const sectionColors = [
+    const sectionColors: Array<{ bg: [number, number, number]; border: [number, number, number]; accent: [number, number, number] }> = [
       { bg: [240, 248, 255], border: [100, 149, 237], accent: [100, 149, 237] }, // Blue for Visual Flow
       { bg: [240, 255, 240], border: [34, 139, 34], accent: [34, 139, 34] },     // Green for Color & Contrast
       { bg: [255, 240, 240], border: [220, 20, 60], accent: [220, 20, 60] }      // Red for Critical Issue
@@ -1013,9 +1145,8 @@ export class PDFExporter {
         
         // Special formatting for Visual Flow Analysis
         if (key.toLowerCase() === 'eyeflowpath' || key.toLowerCase() === 'eyeflow') {
-          // Format as flow with ASCII arrows (PDF compatible)
-          const flowItems = cleanValue.split(/\s+/).filter(item => item.length > 0);
-          const formattedFlow = flowItems.join(' -> ');
+          // Keep the original flow format with existing arrows, just clean it
+          const formattedFlow = cleanValue.replace(/\s*->\s*/g, ' -> '); // Normalize arrow spacing
           
           // Add label in accent color
           this.doc.setTextColor(...colors.accent);
@@ -1344,12 +1475,6 @@ export class PDFExporter {
     return 16 + (sectionLines.length * 5) + (suggestionLines.length * 4);
   }
 
-  private calculateCopySuggestionHeightUltraCompact(suggestion: any, textWidth: number): number {
-    const sectionLines = this.wrapText(suggestion.section, this.pageWidth - (2 * this.margin) - 10);
-    const suggestionLines = this.wrapText(suggestion.suggestion, textWidth);
-    // Ultra-compact padding for maximum space efficiency
-    return 8 + (sectionLines.length * 4) + (suggestionLines.length * 3);
-  }
 
   private calculateQuickWinHeight(win: any, textWidth: number): number {
     const titleLines = this.wrapText(win.title, this.pageWidth - (2 * this.margin) - 15);
