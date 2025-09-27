@@ -581,120 +581,190 @@ export class PDFExporter {
     
     const topRecommendations = recommendations.slice(0, 5);
     
-    // Reduce top spacing by 40% for Priority Recommendations page header
-    this.yPosition -= 10; // Move header up by reducing starting position
-    
+    // Modern header with gradient-like effect (matching other sections)
+    this.yPosition += 2;
     this.addSectionHeaderProfessional('Priority Recommendations');
     
     topRecommendations.forEach((rec, index) => {
-      // Optimized text width for better space usage
-      const safeTextWidth = this.pageWidth - (2 * this.margin) - 20; // Reduced from 30
-      let cardHeight = this.calculateRecommendationHeightSafe(rec, safeTextWidth);
+      // Calculate text width for content - use the same calculation as other sections
+      let safeTextWidth = this.pageWidth - (2 * this.margin) - 20; // Standard width calculation
       
-      // Handle first recommendation differently to keep it with header
+      // FORCE FIX: Make the first card use a slightly larger width to prevent cutoff
       if (index === 0) {
-        // Reduce height by a fixed amount for first recommendation to prevent cut-off
-        cardHeight = Math.max(cardHeight - 40, cardHeight * 0.8); // Reduce by 40px or 20%, whichever is smaller
-        // Don't check page break for first recommendation - keep it with header
-      } else {
-        this.checkNewPage(cardHeight + 25); // Standard buffer for subsequent cards
+        safeTextWidth = this.pageWidth - (2 * this.margin) + 30; // Add 30pt extra width for first card
       }
       
-      // Professional card design with optimized boundaries
-      this.doc.setFillColor(252, 248, 255); // Very light purple tint
-      this.doc.roundedRect(this.margin - 4, this.yPosition - 4, this.pageWidth - (2 * this.margin) + 8, cardHeight, 5, 5, 'F');
+      // SEPARATE WIDTH for Implementation and Why sections on first card only
+      let implementationWhyWidth = safeTextWidth; // Default to same as safeTextWidth
+      if (index === 0) {
+        // For first card, use standard width for Implementation and Why sections to prevent overlap
+        implementationWhyWidth = this.pageWidth - (2 * this.margin) - 20; // Standard width
+      }
       
-      this.doc.setDrawColor(...this.colors.primary);
-      this.doc.setLineWidth(0.3);
-      this.doc.roundedRect(this.margin - 4, this.yPosition - 4, this.pageWidth - (2 * this.margin) + 8, cardHeight, 5, 5, 'S');
+      // Store starting position for dynamic height calculation
+      const cardStartY = this.yPosition;
       
-      // Recommendation title with optimized spacing
+      // First, calculate the height by simulating content placement
+      let calculatedHeight = 0; // Start with no padding
+      
+      // Calculate title height - apply forced width constraint specifically for title only
+      const titleText = `${index + 1}. ${rec.title}`;
+      const titleTextWidth = this.pageWidth - (2 * this.margin) - 50; // Force much narrower width for title only (14pt font needs more space)
+      const wrappedTitle = this.wrapText(titleText, titleTextWidth);
+      calculatedHeight += 8; // Text starts 8pt from card top (increased from 3)
+      calculatedHeight += (wrappedTitle.length * 5); // Increased line spacing for larger font
+      calculatedHeight += 12; // Space for badges (increased from 8)
+      
+      // Calculate content sections height - use full text width
+      const issueText = this.wrapText(rec.issue || rec.currentState || '', safeTextWidth);
+      const solutionText = this.wrapText(rec.solution || rec.proposedChange || '', safeTextWidth);
+      
+      calculatedHeight += 8; // Section header spacing
+      calculatedHeight += (issueText.length * 4.2);
+      calculatedHeight += 8; // Between sections
+      calculatedHeight += 8; // Section header spacing
+      calculatedHeight += (solutionText.length * 4.2);
+      
+      // Add height for implementation section if available
+      if (rec.implementation || rec.implementationDetails || rec.how) {
+        calculatedHeight += 8; // Section header spacing
+        const implementationData = rec.implementation || rec.implementationDetails || rec.how;
+        if (Array.isArray(implementationData)) {
+          implementationData.forEach((step) => {
+            const stepText = this.wrapText(step, implementationWhyWidth - 9); // Account for bullet point spacing
+            calculatedHeight += (stepText.length * 4.2);
+            calculatedHeight += 2; // Between steps
+          });
+        } else {
+          const implementationText = this.wrapText(implementationData, implementationWhyWidth);
+          calculatedHeight += (implementationText.length * 4.2);
+        }
+        calculatedHeight += 8; // After implementation section
+      }
+      
+      // Add height for psychology section if available
+      if (rec.psychologyBehind || rec.psychology || rec.why) {
+        calculatedHeight += 8; // Section header spacing
+        const psychologyData = rec.psychologyBehind || rec.psychology || rec.why;
+        const psychologyText = this.wrapText(psychologyData, implementationWhyWidth);
+        calculatedHeight += (psychologyText.length * 4.2);
+        calculatedHeight += 8; // After psychology section
+      }
+      
+      calculatedHeight += 3; // Bottom padding to match top padding
+      
+      // Check for page break - but not for first recommendation to keep it with header
+      if (index > 0) {
+        const needsNewPage = this.checkNewPage(calculatedHeight + 10);
+        // If we started a new page, add the Priority Recommendations header
+        if (needsNewPage) {
+          this.addPriorityRecommendationsHeader();
+        }
+      }
+      
+      // Draw container first with calculated height (matching other sections)
+      this.doc.setFillColor(255, 255, 255);
+      this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'F');
+      
+      // Light gray border
+      this.doc.setDrawColor(200, 200, 200);
+      this.doc.setLineWidth(0.5);
+      this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'S');
+      
+      // Purple vertical accent bar on the left - sharp right angles
+      this.doc.setFillColor(...this.colors.primary);
+      this.doc.rect(this.margin - 2, this.yPosition - 1, 4, calculatedHeight, 'F');
+      
+      // Now add text content on top of the container
+      // Recommendation title in purple
       this.doc.setTextColor(...this.colors.primary);
       this.doc.setFont('helvetica', 'bold');
-      this.doc.setFontSize(11);
-      const titleText = `${index + 1}. ${rec.title}`;
-      const maxTitleWidth = this.pageWidth - (2 * this.margin) - 15; // Optimized width
-      const wrappedTitle = this.wrapText(titleText, maxTitleWidth);
+      this.doc.setFontSize(14); // Increased from 11 to 14 for bigger title
       
-      let titleY = this.yPosition + 3; // Reduced spacing
+      let titleY = this.yPosition + 8; // Increased from 3 to 8 for more space from card top
       wrappedTitle.forEach((line) => {
-        this.doc.text(line, this.margin, titleY);
-        titleY += 5; // Reduced line height
+        const cleanLine = this.sanitizeTextForPDF(line);
+        this.doc.setCharSpace(0);
+        const safeLine = cleanLine.replace(/[^\x20-\x7E]/g, '');
+        this.doc.text(safeLine, this.margin + 6, titleY);
+        titleY += 5; // Increased line spacing to match larger font
       });
-      this.yPosition = titleY + 8; // Reduced spacing
       
-      // Compact badges with professional styling
+      // Compact badges with professional styling - positioned to avoid text overlap
       this.doc.setFontSize(7);
       this.doc.setFont('helvetica', 'bold');
       
-      // Priority badge - more compact
+      // Calculate badge positions to avoid overlap with text
+      const badgeY = titleY + 2;
+      
+      // Priority badge
       const priorityColor = this.getPriorityColor(rec.priority);
       this.doc.setFillColor(...priorityColor);
-      this.doc.roundedRect(this.margin, this.yPosition, 32, 8, 2, 2, 'F');
+      this.doc.roundedRect(this.margin + 6, badgeY, 32, 8, 2, 2, 'F');
       this.doc.setTextColor(255, 255, 255);
-      this.doc.text(rec.priority.toUpperCase(), this.margin + 2, this.yPosition + 5);
+      this.doc.text(rec.priority.toUpperCase(), this.margin + 8, badgeY + 6);
       
-      // Effort badge - more compact
+      // Effort badge
       this.doc.setFillColor(...this.colors.secondary);
-      this.doc.roundedRect(this.margin + 36, this.yPosition, 36, 8, 2, 2, 'F');
+      this.doc.roundedRect(this.margin + 42, badgeY, 36, 8, 2, 2, 'F');
       this.doc.setTextColor(255, 255, 255);
-      this.doc.text(`EFFORT: ${this.getEffortLabel(rec.effort)}`, this.margin + 38, this.yPosition + 5);
+      this.doc.text(`EFFORT: ${this.getEffortLabel(rec.effort)}`, this.margin + 44, badgeY + 6);
       
-      // Timeline badge - more compact
+      // Timeline badge
       if (rec.timeline) {
         this.doc.setFillColor(...this.colors.primary);
-        this.doc.roundedRect(this.margin + 76, this.yPosition, 40, 8, 2, 2, 'F');
+        this.doc.roundedRect(this.margin + 82, badgeY, 40, 8, 2, 2, 'F');
         this.doc.setTextColor(255, 255, 255);
-        this.doc.text(rec.timeline.toUpperCase(), this.margin + 78, this.yPosition + 5);
+        this.doc.text(rec.timeline.toUpperCase(), this.margin + 84, badgeY + 6);
       }
       
-      // Standard internal spacing for all recommendations - only bottom spacing differs for first card
+      let textY = badgeY + 14; // Increased space after badges to prevent overlap
       
-      this.yPosition += 14; // Standard spacing between badges and content
-      
-      // Issue section with optimized spacing
-      this.doc.setTextColor(...this.colors.primary);
+      // Issue section
+      this.doc.setTextColor(220, 53, 69); // Red color for ISSUE label
       this.doc.setFont('helvetica', 'bold');
-      this.doc.setFontSize(8);
-      this.doc.text('ISSUE:', this.margin, this.yPosition);
-      this.yPosition += 8; // Standard spacing after section headers
+      this.doc.setFontSize(10);
+      this.doc.text('ISSUE:', this.margin + 6, textY);
+      textY += 8;
       
-      this.doc.setTextColor(...this.colors.text);
+      this.doc.setTextColor(0, 0, 0);
       this.doc.setFont('helvetica', 'normal');
-      const issueText = this.wrapText(rec.issue || rec.currentState, safeTextWidth);
       issueText.forEach((line) => {
-        this.doc.text(line, this.margin + 6, this.yPosition); // Reduced indent from 8
-        this.yPosition += 4; // Standard line spacing
+        const cleanLine = this.sanitizeTextForPDF(line);
+        const safeLine = cleanLine.replace(/[^\x20-\x7E]/g, '');
+        this.doc.text(safeLine, this.margin + 6, textY);
+        textY += 4.2;
       });
       
-      this.yPosition += 6; // Standard spacing between sections
+      textY += 6; // Space between sections
       
-      // Solution section with optimized spacing
-      this.doc.setTextColor(...this.colors.success);
+      // Solution section
+      this.doc.setTextColor(34, 197, 94); // Green color for SOLUTION label
       this.doc.setFont('helvetica', 'bold');
-      this.doc.setFontSize(8);
-      this.doc.text('SOLUTION:', this.margin, this.yPosition);
-      this.yPosition += 8; // Standard spacing after section headers
+      this.doc.setFontSize(10);
+      this.doc.text('SOLUTION:', this.margin + 6, textY);
+      textY += 8;
       
-      this.doc.setTextColor(...this.colors.text);
+      this.doc.setTextColor(0, 0, 0);
       this.doc.setFont('helvetica', 'normal');
-      const solutionText = this.wrapText(rec.solution || rec.proposedChange, safeTextWidth);
       solutionText.forEach((line) => {
-        this.doc.text(line, this.margin + 6, this.yPosition); // Reduced indent from 8
-        this.yPosition += 4; // Standard line spacing
+        const cleanLine = this.sanitizeTextForPDF(line);
+        const safeLine = cleanLine.replace(/[^\x20-\x7E]/g, '');
+        this.doc.text(safeLine, this.margin + 6, textY);
+        textY += 4.2;
       });
       
-      this.yPosition += 6; // Standard spacing between sections
+      textY += 6; // Space between sections
       
       // How to implement section (if available)
       if (rec.implementation || rec.implementationDetails || rec.how) {
-        this.doc.setTextColor(...this.colors.secondary);
+        this.doc.setTextColor(...this.colors.primary);
         this.doc.setFont('helvetica', 'bold');
-        this.doc.setFontSize(9);
-        this.doc.text('HOW TO IMPLEMENT:', this.margin, this.yPosition);
-        this.yPosition += 10; // Standard spacing after section headers
+        this.doc.setFontSize(10);
+        this.doc.text('HOW TO IMPLEMENT:', this.margin + 6, textY);
+        textY += 8;
         
-        this.doc.setTextColor(...this.colors.text);
+        this.doc.setTextColor(0, 0, 0);
         this.doc.setFont('helvetica', 'normal');
         
         const implementationData = rec.implementation || rec.implementationDetails || rec.how;
@@ -702,56 +772,58 @@ export class PDFExporter {
           // Handle array of implementation steps
           implementationData.forEach((step) => {
             // Bullet point
-            this.doc.setTextColor(...this.colors.secondary);
+            this.doc.setTextColor(...this.colors.primary);
             this.doc.setFont('helvetica', 'bold');
-            this.doc.text('-', this.margin + 8, this.yPosition);
+            this.doc.text('-', this.margin + 8, textY);
             
             // Step text
-            this.doc.setTextColor(...this.colors.text);
+            this.doc.setTextColor(0, 0, 0);
             this.doc.setFont('helvetica', 'normal');
-            const stepText = this.wrapText(step, safeTextWidth - 15);
+            const stepText = this.wrapText(step, implementationWhyWidth - 9);
             stepText.forEach((line) => {
-              this.doc.text(line, this.margin + 15, this.yPosition);
-              this.yPosition += 5; // Standard line spacing
+              const cleanLine = this.sanitizeTextForPDF(line);
+              const safeLine = cleanLine.replace(/[^\x20-\x7E]/g, '');
+              this.doc.text(safeLine, this.margin + 15, textY);
+              textY += 4.2;
             });
-            this.yPosition += 2; // Standard spacing between steps
+            textY += 2; // Space between steps
           });
         } else {
           // Handle string implementation
-          const implementationText = this.wrapText(implementationData, safeTextWidth);
+          const implementationText = this.wrapText(implementationData, implementationWhyWidth);
           implementationText.forEach((line) => {
-            this.doc.text(line, this.margin + 8, this.yPosition);
-            this.yPosition += 5; // Standard line spacing
+            const cleanLine = this.sanitizeTextForPDF(line);
+            const safeLine = cleanLine.replace(/[^\x20-\x7E]/g, '');
+            this.doc.text(safeLine, this.margin + 6, textY);
+            textY += 4.2;
           });
         }
-        this.yPosition += 8; // Standard spacing between sections
+        textY += 6; // Space after implementation section
       }
       
       // Why this works section (if available)
       if (rec.psychologyBehind || rec.psychology || rec.why) {
         this.doc.setTextColor(...this.colors.primary);
         this.doc.setFont('helvetica', 'bold');
-        this.doc.setFontSize(8);
-        this.doc.text('WHY THIS WORKS:', this.margin, this.yPosition);
-        this.yPosition += 8; // Standard spacing after section headers
+        this.doc.setFontSize(10);
+        this.doc.text('WHY THIS WORKS:', this.margin + 6, textY);
+        textY += 8;
         
-        this.doc.setTextColor(...this.colors.text);
+        this.doc.setTextColor(0, 0, 0);
         this.doc.setFont('helvetica', 'normal');
         const psychologyData = rec.psychologyBehind || rec.psychology || rec.why;
-        const psychologyText = this.wrapText(psychologyData, safeTextWidth);
+        const psychologyText = this.wrapText(psychologyData, implementationWhyWidth);
         psychologyText.forEach((line) => {
-          this.doc.text(line, this.margin + 6, this.yPosition); // Reduced indent from 8
-          this.yPosition += 4; // Standard line spacing
+          const cleanLine = this.sanitizeTextForPDF(line);
+          const safeLine = cleanLine.replace(/[^\x20-\x7E]/g, '');
+          this.doc.text(safeLine, this.margin + 6, textY);
+          textY += 4.2;
         });
-        this.yPosition += 6; // Standard spacing after section
+        textY += 6; // Space after psychology section
       }
       
-      // Add spacing between recommendation cards - reduce bottom space by 30% for first card
-      if (index === 0) {
-        this.yPosition += Math.floor(12 * 0.7); // 30% reduction for first card bottom spacing
-      } else {
-        this.yPosition += 12; // Standard spacing for other cards
-      }
+      // Move to next card position
+      this.yPosition = cardStartY + calculatedHeight + 5; // Spacing between cards
     });
     
     this.yPosition += 15;
@@ -1207,7 +1279,7 @@ export class PDFExporter {
   }
 
   private addSectionHeaderProfessional(title: string): void {
-    this.checkNewPage(50);
+    this.checkNewPage(50); // Ignore return value for this method
     
     // Reduce spacing for specific sections
     if (title === 'Copy Suggestions' || title === 'Quick Wins' || title === 'Visual CRO Analysis') {
@@ -1226,6 +1298,23 @@ export class PDFExporter {
     this.doc.setFont('helvetica', 'bold');
     this.doc.setTextColor(255, 255, 255);
     this.doc.text(title, this.margin, this.yPosition);
+    this.yPosition += 25;
+    
+    this.doc.setTextColor(...this.colors.text);
+  }
+
+  private addPriorityRecommendationsHeader(): void {
+    // Add Priority Recommendations header for new pages
+    this.yPosition += 8; // Small spacing from top of new page
+    
+    // Professional section header
+    this.doc.setFillColor(...this.colors.primary);
+    this.doc.roundedRect(this.margin - 8, this.yPosition - 10, this.pageWidth - (2 * this.margin) + 16, 20, 5, 5, 'F');
+    
+    this.doc.setFontSize(14);
+    this.doc.setFont('helvetica', 'bold');
+    this.doc.setTextColor(255, 255, 255);
+    this.doc.text('Priority Recommendations', this.margin, this.yPosition);
     this.yPosition += 25;
     
     this.doc.setTextColor(...this.colors.text);
@@ -1361,7 +1450,7 @@ export class PDFExporter {
     return cleanText;
   }
 
-  private checkNewPage(requiredSpace: number): void {
+  private checkNewPage(requiredSpace: number): boolean {
     // Improved space calculation to prevent purple box cut-offs
     const bottomMargin = this.margin + 25; // Increased bottom margin to prevent cut-offs
     const availableSpace = this.pageHeight - bottomMargin;
@@ -1370,7 +1459,9 @@ export class PDFExporter {
     if (this.yPosition + requiredSpace > availableSpace) {
       this.doc.addPage();
       this.yPosition = this.margin + 2; // Minimal top margin on new pages to reduce empty space
+      return true; // Return true to indicate a new page was created
     }
+    return false; // Return false if no new page was needed
   }
 
   private getPriorityColor(priority: string): [number, number, number] {
