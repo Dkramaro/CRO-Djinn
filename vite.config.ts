@@ -8,6 +8,8 @@ export default defineConfig({
         popup: 'src/popup/popup.html',
         options: 'src/options/options.html',
         content: 'src/content/content.ts',
+        background: 'src/background/background.ts',
+        offscreen: 'src/offscreen/offscreen.html',
       },
       output: {
         entryFileNames: '[name].js',

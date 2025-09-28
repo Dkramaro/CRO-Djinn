@@ -234,83 +234,20 @@ STAR RATING CRITERIA:
 ⭐⭐ (2 Stars) - Good Foundation: 2-4 significant opportunities, basic elements present but not optimized for industry/purchase behavior, decent user experience but missing key conversion triggers
 ⭐⭐⭐ (3 Stars) - Well Optimized: 1-2 minor improvements possible, strong industry-appropriate conversion fundamentals, good psychology implementation, well-designed for target audience and page type`;
 
-    // Call appropriate API based on provider
+    // Call appropriate API based on provider - NOTE: Screenshots are now pre-captured by background script
     let content: string;
     console.log('LLM Analysis starting - Provider:', this.settings.provider, 'Full Page:', useFullPageScreenshots);
+    console.log('IMPORTANT: This method should NOT be called directly anymore. Use background script instead.');
     
+    // This method is now deprecated in favor of the offscreen document approach
+    // Screenshots should be pre-captured and passed in, not captured here
+    throw new Error('LLMAnalyzer.analyzeRawPageData() is deprecated. Use background script with offscreen document instead.');
+    
+    // Legacy code below - kept for reference but should not execute
     if (this.settings.provider === 'gemini') {
-      // Capture screenshot(s) for visual analysis with Gemini
-      try {
-        if (useFullPageScreenshots) {
-          console.log('Starting full-page screenshot capture for Gemini...');
-          const screenshotResult = await ScreenshotCapture.captureFullPage({
-            maxScreenshots: 12,
-            scrollDelay: 500,
-            progressCallback: (current, total) => {
-              console.log(`Capturing screenshot ${current}/${total}`);
-              // Send progress to popup if available
-              if (typeof chrome !== 'undefined' && chrome.runtime) {
-                chrome.runtime.sendMessage({
-                  type: 'screenshot-progress',
-                  current,
-                  total
-                }).catch(() => {
-                  // Ignore errors if popup is closed
-                });
-              }
-            }
-          });
-          console.log('Full-page screenshots captured:', screenshotResult.totalCaptured, 'total size:', Math.round(screenshotResult.totalSize / 1024 / 1024) + 'MB');
-          content = await this.callGeminiAPIWithMultipleImages(systemMessage, userMessage, screenshotResult.screenshots);
-        } else {
-          const screenshot = await ScreenshotCapture.captureActiveTab();
-          const compressedScreenshot = await ScreenshotCapture.compressIfNeeded(screenshot);
-          content = await this.callGeminiAPIWithImage(systemMessage, userMessage, compressedScreenshot);
-        }
-      } catch (screenshotError) {
-        console.warn('Screenshot capture failed, falling back to text-only analysis:', screenshotError);
-        content = await this.callGeminiAPI(systemMessage, userMessage);
-      }
+      content = await this.callGeminiAPI(systemMessage, userMessage);
     } else {
-      // OpenAI - Check if model supports vision and capture screenshot(s)
-      const modelName = this.settings.openaiModel;
-      const supportsVision = modelName.includes('gpt-4') || modelName.startsWith('gpt-5');
-      
-      if (supportsVision) {
-        try {
-          if (useFullPageScreenshots) {
-            console.log('Starting full-page screenshot capture for OpenAI...');
-            const screenshotResult = await ScreenshotCapture.captureFullPage({
-              maxScreenshots: 12,
-              scrollDelay: 500,
-              progressCallback: (current, total) => {
-                console.log(`Capturing screenshot ${current}/${total}`);
-                // Send progress to popup if available
-                if (typeof chrome !== 'undefined' && chrome.runtime) {
-                  chrome.runtime.sendMessage({
-                    type: 'screenshot-progress',
-                    current,
-                    total
-                  }).catch(() => {
-                    // Ignore errors if popup is closed
-                  });
-                }
-              }
-            });
-            console.log('Full-page screenshots captured for OpenAI:', screenshotResult.totalCaptured, 'total size:', Math.round(screenshotResult.totalSize / 1024 / 1024) + 'MB');
-            content = await this.callOpenAIAPIWithMultipleImages(systemMessage, userMessage, screenshotResult.screenshots);
-          } else {
-            const screenshot = await ScreenshotCapture.captureActiveTab();
-            const compressedScreenshot = await ScreenshotCapture.compressIfNeeded(screenshot);
-            content = await this.callOpenAIAPIWithImage(systemMessage, userMessage, compressedScreenshot);
-          }
-        } catch (screenshotError) {
-          console.warn('Screenshot capture failed, falling back to text-only analysis:', screenshotError);
-          content = await this.callOpenAIAPI(systemMessage, userMessage);
-        }
-      } else {
-        content = await this.callOpenAIAPI(systemMessage, userMessage);
-      }
+      content = await this.callOpenAIAPI(systemMessage, userMessage);
     }
 
     console.log('LLM API Response content length:', content?.length);
@@ -329,8 +266,9 @@ STAR RATING CRITERIA:
       } catch (parseError) {
         // If direct parsing fails, try to extract JSON from the response
         const jsonMatch = content.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          analysis = JSON.parse(jsonMatch[0]);
+        const firstMatch = jsonMatch?.[0];
+        if (firstMatch && typeof firstMatch === 'string') {
+          analysis = JSON.parse(firstMatch as string);
         } else {
           throw new Error('No valid JSON found in response');
         }

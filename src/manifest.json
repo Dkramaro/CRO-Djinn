@@ -3,15 +3,23 @@
   "name": "CRO Genie",
   "version": "1.0.0",
   "description": "AI-powered landing page analysis to maximize conversion rates for paid traffic",
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
   "permissions": [
     "activeTab",
     "scripting",
     "storage",
     "downloads",
-    "tabs"
+    "tabs",
+    "offscreen",
+    "notifications"
   ],
   "host_permissions": [
-    "<all_urls>"
+    "<all_urls>",
+    "https://api.openai.com/*",
+    "https://generativelanguage.googleapis.com/*"
   ],
   "icons": {
     "16": "icons/CRO-Genie Logo.png",

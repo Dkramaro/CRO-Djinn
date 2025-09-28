@@ -25,16 +25,17 @@ export class ScreenshotCapture {
         throw new Error('No active tab found');
       }
 
-      // Capture screenshot of the visible area
-      const dataUrl = await chrome.tabs.captureVisibleTab(tabs[0].windowId, {
-        format: 'png',
-        quality: 85 // Good quality while keeping file size reasonable
-      });
+      // Capture screenshot of the visible area with retry logic
+      const dataUrl = await this.captureWithRetry(tabs[0].windowId, 3);
+      if (!dataUrl) {
+        throw new Error('Failed to capture screenshot after retries due to quota limits');
+      }
 
       // Remove the data:image/png;base64, prefix to get just the base64 data
       const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
       
-      return base64Data;
+      // Apply 30% compression for better token efficiency
+      return await this.compressScreenshot(base64Data, 0.4); // 60% reduction
     } catch (error) {
       console.error('Screenshot capture failed:', error);
       throw new Error(`Failed to capture screenshot: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -65,23 +66,49 @@ export class ScreenshotCapture {
 
       console.log('Starting full page capture for tab:', tabId);
 
-      // Simple approach: Get dimensions without injecting complex scripts
+      // Get accurate page dimensions with better detection and scroll preparation
       const pageInfo = await chrome.scripting.executeScript({
         target: { tabId },
         func: () => {
-          const vh = window.innerHeight;
-          const th = Math.max(
-            document.body.scrollHeight || 0,
-            document.body.offsetHeight || 0,
-            document.documentElement.clientHeight || 0,
-            document.documentElement.scrollHeight || 0,
-            document.documentElement.offsetHeight || 0
-          );
+          // Reset scroll position to top first
+          window.scrollTo({ top: 0, behavior: 'instant' });
           
-          // Set scroll behavior to instant for precise positioning
+          // Get viewport height
+          const vh = window.innerHeight;
+          
+          // Get total page height using multiple methods for accuracy
+          const bodyScrollHeight = document.body.scrollHeight || 0;
+          const bodyOffsetHeight = document.body.offsetHeight || 0;
+          const docClientHeight = document.documentElement.clientHeight || 0;
+          const docScrollHeight = document.documentElement.scrollHeight || 0;
+          const docOffsetHeight = document.documentElement.offsetHeight || 0;
+          
+          const th = Math.max(
+            bodyScrollHeight,
+            bodyOffsetHeight,
+            docScrollHeight,
+            docOffsetHeight,
+            // Also check the computed height of all elements
+            Array.from(document.body.children).reduce((maxHeight, elem) => {
+              const rect = elem.getBoundingClientRect();
+              return Math.max(maxHeight, rect.bottom + window.pageYOffset);
+            }, 0)
+          );
+
+          console.log('Page dimension analysis:', {
+            viewport: vh,
+            bodyScrollHeight,
+            bodyOffsetHeight,
+            docScrollHeight,
+            docOffsetHeight,
+            finalHeight: th
+          });
+
+          // Ensure consistent scroll behavior for precise positioning
           const originalBehavior = document.documentElement.style.scrollBehavior;
           document.documentElement.style.scrollBehavior = 'auto';
-          
+          document.body.style.scrollBehavior = 'auto';
+
           return {
             viewportHeight: vh,
             totalHeight: th,
@@ -120,75 +147,102 @@ export class ScreenshotCapture {
 
       await this.delay(scrollDelay);
 
-      // Capture screenshots sequentially
+      // Capture screenshots sequentially with improved positioning
       for (let i = 0; i < screenshotsNeeded; i++) {
         console.log(`Capturing screenshot ${i + 1}/${screenshotsNeeded}`);
         progressCallback?.(i + 1, screenshotsNeeded);
 
-        const scrollTop = i * viewportHeight;
+        // Calculate scroll position with slight overlap to ensure continuity
+        const overlapPixels = 50; // 50px overlap to ensure smooth transitions
+        let scrollTop = 0;
+        
+        if (i === 0) {
+          scrollTop = 0; // First screenshot starts at the very top
+        } else {
+          scrollTop = (i * viewportHeight) - overlapPixels;
+        }
+        
+        // Ensure we don't scroll past the bottom
+        const maxScrollTop = Math.max(0, totalHeight - viewportHeight);
+        scrollTop = Math.min(scrollTop, maxScrollTop);
 
-        // Scroll to position
-        await chrome.scripting.executeScript({
+        console.log(`Positioning for screenshot ${i + 1}: scrollTop=${scrollTop}, viewportHeight=${viewportHeight}`);
+
+        // Scroll to precise position and verify
+        const scrollResult = await chrome.scripting.executeScript({
           target: { tabId },
-          func: (scrollY) => {
-            window.scrollTo({ top: scrollY, behavior: 'instant' });
+          func: (targetScrollY, expectedViewportHeight) => {
+            // Set scroll position
+            window.scrollTo({ top: targetScrollY, behavior: 'instant' });
+            
+            // Force reflow to ensure positioning is complete
+            document.documentElement.offsetHeight;
+            
+            // Verify position
+            const actualScrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const actualViewportHeight = window.innerHeight;
+            
+            console.log(`Scroll verification: requested=${targetScrollY}, actual=${actualScrollTop}, viewport=${actualViewportHeight}`);
+            
+            return {
+              requestedScrollTop: targetScrollY,
+              actualScrollTop,
+              viewportHeight: actualViewportHeight,
+              success: Math.abs(actualScrollTop - targetScrollY) < 10 // Allow 10px tolerance
+            };
           },
-          args: [scrollTop]
+          args: [scrollTop, viewportHeight]
         });
 
-        // Wait for content to load
+        const scrollVerification = scrollResult?.[0]?.result;
+        if (!scrollVerification?.success) {
+          console.warn(`Scroll positioning may be inaccurate for screenshot ${i + 1}`);
+        }
+
+        // Wait for content to settle
         await this.delay(scrollDelay);
 
-        // Capture screenshot
-        const dataUrl = await chrome.tabs.captureVisibleTab(windowId, {
-          format: 'png',
-          quality: 85
-        });
+        // Capture screenshot with retry logic for quota limits
+        const dataUrl = await this.captureWithRetry(windowId, 3);
+        if (!dataUrl) {
+          console.warn(`Failed to capture screenshot ${i + 1}/${screenshotsNeeded}, skipping`);
+          continue;
+        }
 
         const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
         
-        // Check size and compress if needed (reduced from 2MB to 1.5MB for 25% more compression)
+        // Apply compression to all screenshots for token efficiency
         const originalSize = this.getEstimatedSize(base64Data);
-        let finalScreenshot = base64Data;
+        console.log(`Screenshot ${i + 1} original size: ${Math.round(originalSize / 1024)}KB`);
         
-        const compressionLimit = Math.floor(2 * 1024 * 1024 * 0.75); // 25% more compression
-        if (originalSize > compressionLimit) {
-          finalScreenshot = await this.compressIfNeeded(base64Data, compressionLimit);
-          anyCompressed = true;
-        } else {
-          // Apply additional 25% compression even if under the limit
-          finalScreenshot = await this.compressIfNeeded(base64Data, Math.floor(originalSize * 0.75));
-          anyCompressed = true;
-        }
+        const finalScreenshot = await this.compressScreenshot(base64Data, 0.4); // 60% reduction
+        const compressedSize = this.getEstimatedSize(finalScreenshot);
+        console.log(`Screenshot ${i + 1} compressed size: ${Math.round(compressedSize / 1024)}KB (${Math.round((1 - compressedSize/originalSize) * 100)}% reduction)`);
+        
+        anyCompressed = true;
 
         screenshots.push(finalScreenshot);
         totalSize += this.getEstimatedSize(finalScreenshot);
 
-        // Check total size limit
-        if (totalSize > 18 * 1024 * 1024) {
-          console.warn(`Stopping at screenshot ${i + 1} due to size limit`);
+        // Check if we've captured the full page (with some tolerance)
+        const currentScrollTop = scrollVerification?.actualScrollTop || scrollTop;
+        const remainingContent = totalHeight - (currentScrollTop + viewportHeight);
+        
+        console.log(`After screenshot ${i + 1}: scrollTop=${currentScrollTop}, remaining=${remainingContent}px`);
+        
+        if (remainingContent <= 100) { // Less than 100px remaining
+          console.log(`Full page captured at screenshot ${i + 1}, remaining content: ${remainingContent}px`);
           break;
         }
 
-        // Check if we've reached the bottom
-        const scrollCheck = await chrome.scripting.executeScript({
-          target: { tabId },
-          func: () => {
-            const currentScrollTop = window.pageYOffset || document.documentElement.scrollTop;
-            const currentViewportHeight = window.innerHeight;
-            const currentTotalHeight = Math.max(
-              document.body.scrollHeight || 0,
-              document.documentElement.scrollHeight || 0
-            );
-            
-            return {
-              isAtBottom: currentScrollTop + currentViewportHeight >= currentTotalHeight - 50
-            };
-          }
-        });
+        // Additional delay between screenshots to respect Chrome's quota
+        if (i < screenshotsNeeded - 1) {
+          await this.delay(1200); // 1.2 second delay between screenshots
+        }
 
-        if (scrollCheck?.[0]?.result?.isAtBottom) {
-          console.log(`Reached bottom at screenshot ${i + 1}`);
+        // Check total size limit (increased since we're compressing better)
+        if (totalSize > 20 * 1024 * 1024) { // Increased to 20MB since we have better compression
+          console.warn(`Stopping at screenshot ${i + 1} due to size limit (${Math.round(totalSize / 1024 / 1024)}MB)`);
           break;
         }
       }
@@ -235,7 +289,73 @@ export class ScreenshotCapture {
   }
 
   /**
-   * Compress base64 image if it's too large for API limits
+   * Compress screenshot by specified ratio for token efficiency
+   * @param base64Data Original base64 data
+   * @param targetRatio Target size ratio (0.4 = 60% compression)
+   * @returns Promise<string> Compressed base64 data
+   */
+  static async compressScreenshot(base64Data: string, targetRatio: number = 0.4): Promise<string> {
+    try {
+      // For service worker context, check if we have access to DOM
+      if (typeof document === 'undefined' || !document.createElement) {
+        console.warn('Canvas not available in this context, returning original image');
+        return base64Data;
+      }
+
+      // Create canvas for compression
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        console.warn('Canvas context not available, returning original image');
+        return base64Data;
+      }
+
+      // Create image from base64
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('Failed to load image for compression'));
+        img.src = `data:image/png;base64,${base64Data}`;
+      });
+
+      console.log(`Original image dimensions: ${img.width}x${img.height}`);
+
+      // Calculate dimensions for target compression - more aggressive reduction
+      const dimensionRatio = Math.sqrt(targetRatio);
+      const newWidth = Math.floor(img.width * dimensionRatio);
+      const newHeight = Math.floor(img.height * dimensionRatio);
+
+      console.log(`Target compressed dimensions: ${newWidth}x${newHeight} (${Math.round(dimensionRatio * 100)}% scale)`);
+
+      // Resize image with better quality settings
+      canvas.width = newWidth;
+      canvas.height = newHeight;
+      
+      // Use better image smoothing
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, newWidth, newHeight);
+
+      // Convert to JPEG with aggressive compression for token efficiency
+      const jpegQuality = 0.6; // Fixed 60% quality for consistent compression
+      const compressedDataUrl = canvas.toDataURL('image/jpeg', jpegQuality);
+      
+      const originalSize = this.getEstimatedSize(base64Data);
+      const compressedSize = this.getEstimatedSize(compressedDataUrl.replace(/^data:image\/jpeg;base64,/, ''));
+      const compressionRatio = compressedSize / originalSize;
+      
+      console.log(`Compression results: ${Math.round(originalSize / 1024)}KB → ${Math.round(compressedSize / 1024)}KB (${Math.round((1 - compressionRatio) * 100)}% reduction)`);
+      
+      return compressedDataUrl.replace(/^data:image\/jpeg;base64,/, '');
+
+    } catch (error) {
+      console.warn('Screenshot compression failed, returning original image:', error);
+      return base64Data;
+    }
+  }
+
+  /**
+   * Legacy method - compress base64 image if it's too large for API limits
    * @param base64Data Original base64 data
    * @param maxSizeBytes Maximum allowed size in bytes
    * @returns Promise<string> Compressed base64 data
@@ -244,41 +364,13 @@ export class ScreenshotCapture {
     const currentSize = this.getEstimatedSize(base64Data);
     
     if (currentSize <= maxSizeBytes) {
-      return base64Data;
+      // Still apply 30% compression even if under limit for token efficiency
+      return await this.compressScreenshot(base64Data, 0.4);
     }
 
-    try {
-      // Create canvas for compression
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('Canvas context not available');
-
-      // Create image from base64
-      const img = new Image();
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = reject;
-        img.src = `data:image/png;base64,${base64Data}`;
-      });
-
-      // Calculate compression ratio to meet size limit
-      const compressionRatio = Math.sqrt(maxSizeBytes / currentSize);
-      const newWidth = Math.floor(img.width * compressionRatio);
-      const newHeight = Math.floor(img.height * compressionRatio);
-
-      // Resize image
-      canvas.width = newWidth;
-      canvas.height = newHeight;
-      ctx.drawImage(img, 0, 0, newWidth, newHeight);
-
-      // Convert back to base64 with JPEG compression for better size reduction
-      const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-      return compressedDataUrl.replace(/^data:image\/jpeg;base64,/, '');
-
-    } catch (error) {
-      console.warn('Image compression failed, using original:', error);
-      return base64Data;
-    }
+    // For oversized images, calculate needed compression
+    const targetRatio = Math.min(0.7, maxSizeBytes / currentSize);
+    return await this.compressScreenshot(base64Data, targetRatio);
   }
 
   /**
@@ -287,6 +379,40 @@ export class ScreenshotCapture {
    */
   private static delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Capture screenshot with retry logic for quota limits
+   */
+  private static async captureWithRetry(windowId: number, maxRetries: number = 3): Promise<string | null> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const dataUrl = await chrome.tabs.captureVisibleTab(windowId, {
+          format: 'png',
+          quality: 85
+        });
+        return dataUrl;
+      } catch (error) {
+        console.warn(`Screenshot capture attempt ${attempt} failed:`, error);
+        
+        if (error instanceof Error && error.message.includes('MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND')) {
+          // Wait exponentially longer for quota errors
+          const waitTime = 2000 * Math.pow(2, attempt - 1); // 2s, 4s, 8s
+          console.log(`Quota exceeded, waiting ${waitTime}ms before retry ${attempt}/${maxRetries}`);
+          await this.delay(waitTime);
+          
+          if (attempt === maxRetries) {
+            console.error('Max retries reached for screenshot capture');
+            return null;
+          }
+        } else {
+          // For other errors, fail immediately
+          console.error('Non-quota error in screenshot capture:', error);
+          return null;
+        }
+      }
+    }
+    return null;
   }
 
 }

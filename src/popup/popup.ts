@@ -1,14 +1,15 @@
 import { StorageManager } from '../utils/storage';
-import { LLMAnalyzer } from '../utils/llm';
 import { generatePDF } from '../utils/pdf';
 import { AnalysisState, LLMAnalysis, RawPageData } from '../types';
 
 class PopupController {
   private state: AnalysisState = { status: 'idle' };
   private currentUrl: string = '';
+  private currentJobId: string | null = null;
 
   constructor() {
     this.init();
+    this.setupMessageListener();
   }
 
   private async init(): Promise<void> {
@@ -18,8 +19,15 @@ class PopupController {
       this.currentUrl = tabs[0].url;
     }
 
+    // Try to wake up background script if needed (helps with service worker idle state)
+    // This is optional and may fail silently if service worker is idle
+    await this.ensureBackgroundReady();
+
     // Check for cached results
     await this.checkForCachedResults();
+
+    // Check for active jobs
+    await this.checkForActiveJobs();
 
     // Update provider notice
     await this.updateProviderNotice();
@@ -32,10 +40,10 @@ class PopupController {
   }
 
   private setupEventListeners(): void {
-    // Listen for progress updates from background/content script
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      if (message.type === 'screenshot-progress') {
-        this.updateProgress(message.current, message.total);
+    // Listen for job status updates
+    chrome.storage.onChanged.addListener((changes, namespace) => {
+      if (namespace === 'local') {
+        this.handleStorageChanges(changes);
       }
     });
 
@@ -73,6 +81,74 @@ class PopupController {
     });
   }
 
+  private async handleStorageChanges(changes: { [key: string]: chrome.storage.StorageChange }): Promise<void> {
+    // Check if any job status changed
+    for (const [key, change] of Object.entries(changes)) {
+      if (key.startsWith('analysis_jobs_') && change.newValue) {
+        const job = change.newValue;
+        if (job.id === this.currentJobId) {
+          await this.updateJobStatus(job);
+        }
+      }
+    }
+  }
+
+  private async ensureBackgroundReady(): Promise<void> {
+    try {
+      // Simple ping to wake up the background script (with minimal retry)
+      await this.sendMessageToBackground({ type: 'PING' }, 1);
+      console.debug('Background script ping successful');
+    } catch (error) {
+      // If ping fails, that's completely normal - background will wake up on first real request
+      console.debug('Background script ping failed (this is normal during service worker idle):', error);
+      // Don't show any errors to user for this - it's expected behavior
+    }
+  }
+
+  private async checkForActiveJobs(): Promise<void> {
+    if (!this.currentUrl) return;
+
+    try {
+      // Use minimal retries to avoid blocking popup initialization
+      const response = await this.sendMessageToBackground({ type: 'GET_ALL_JOBS' }, 1);
+      if (response?.success && Array.isArray(response.jobs)) {
+        const activeJob = response.jobs.find((job: any) => 
+          job.url === this.currentUrl && 
+          (job.status === 'pending' || job.status === 'scraping' || job.status === 'analyzing')
+        );
+        
+        if (activeJob) {
+          this.currentJobId = activeJob.id;
+          this.state = { 
+            status: activeJob.status === 'analyzing' ? 'analyzing' : 'scraping',
+            progress: activeJob.progress || 'Analysis in progress...'
+          };
+          this.updateUI();
+          console.log(`Found active job: ${activeJob.id} (${activeJob.status})`);
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to check for active jobs (background may be busy with analysis):', error);
+      
+      // If we get connection errors, check if we have cached job info
+      const lastJobId = localStorage.getItem('lastJobId');
+      const lastJobUrl = localStorage.getItem('lastJobUrl');
+      
+      if (lastJobId && lastJobUrl === this.currentUrl) {
+        console.log('Using cached job info during background analysis');
+        this.currentJobId = lastJobId;
+        this.state = {
+          status: 'analyzing',
+          progress: 'Analysis in progress... (Background busy, please wait)'
+        };
+        this.updateUI();
+        
+        // Set up polling to check when background becomes available again
+        this.startPollingForResumption();
+      }
+    }
+  }
+
   private async checkForCachedResults(): Promise<void> {
     if (!this.currentUrl) return;
 
@@ -89,23 +165,72 @@ class PopupController {
   }
 
   private async handleScanClick(): Promise<void> {
-    await this.runAnalysis(false);
+    const scanButton = document.getElementById('scan-button') as HTMLButtonElement;
+    
+    // Prevent multiple concurrent scans
+    if (this.state.status === 'scraping' || this.state.status === 'analyzing') {
+      console.warn('Scan already in progress, ignoring duplicate request');
+      
+      // Disable button to prevent UI confusion
+      if (scanButton) {
+        scanButton.disabled = true;
+        scanButton.textContent = 'Analysis in Progress...';
+      }
+      
+      // If we have a job ID, try to get status update
+      if (this.currentJobId) {
+        console.log('Attempting to get status update for existing job...');
+        try {
+          const statusResponse = await this.sendMessageToBackground({
+            type: 'GET_JOB_STATUS',
+            jobId: this.currentJobId
+          }, 1);
+          
+          if (statusResponse?.success && statusResponse.job) {
+            this.updateJobStatus(statusResponse.job);
+          }
+        } catch (error) {
+          console.warn('Could not get job status update, background may be busy');
+        }
+      }
+      
+      return;
+    }
+
+    // Disable button during analysis start to prevent double-clicks
+    if (scanButton) {
+      scanButton.disabled = true;
+      scanButton.textContent = 'Starting Analysis...';
+    }
+
+    try {
+      await this.startAnalysis(false);
+    } catch (error) {
+      // Re-enable button on error
+      if (scanButton) {
+        scanButton.disabled = false;
+        scanButton.textContent = 'Start Analysis';
+      }
+      throw error;
+    }
   }
 
   private async handleRerunClick(): Promise<void> {
-    await this.runAnalysis(true);
+    await this.startAnalysis(true);
   }
 
-  private async runAnalysis(forceRefresh: boolean = false): Promise<void> {
+  private async startAnalysis(forceRefresh: boolean = false): Promise<void> {
     if (!this.currentUrl) {
       this.showError('Unable to analyze this page');
       return;
     }
 
-    // TEMPORARY: Always force refresh to test quickWins fix
-    console.log('Forcing fresh analysis to test quickWins fix...');
-    await StorageManager.clearCache();
-    
+    // Validate URL before starting analysis
+    if (!this.isValidAnalysisUrl(this.currentUrl)) {
+      this.showError(`Cannot analyze this type of URL: ${this.currentUrl}. Please navigate to a regular website (http/https) to use CRO Genie.`);
+      return;
+    }
+
     // Check if we should use cache
     if (!forceRefresh) {
       const cached = await StorageManager.getCachedAudit(this.currentUrl);
@@ -122,7 +247,7 @@ class PopupController {
     }
 
     try {
-      // Step 1: Check API key and get settings
+      // Check API key and get settings
       const settings = await StorageManager.getSettings();
       const currentApiKey = settings.provider === 'gemini' ? settings.geminiApiKey : settings.openaiApiKey;
       if (!currentApiKey) {
@@ -131,137 +256,292 @@ class PopupController {
         return;
       }
 
-      // Get full-page analysis setting from options
-      const useFullPage = settings.fullPageScreenshot || false;
+      // Get current tab
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tabs[0]?.id) {
+        this.showError('No active tab found');
+        return;
+      }
 
-      // Step 2: Start scraping
-      this.state = { status: 'scraping' };
-      this.updateUI();
-      
-      // Update loading message based on provider and analysis type
-      if (useFullPage) {
-        this.updateLoadingText('Preparing full-page analysis...');
-      } else if (settings.provider === 'gemini') {
-        this.updateLoadingText('Capturing screenshot and scraping content...');
+      // Start analysis job in background
+      const response = await this.sendMessageToBackground({
+        type: 'START_ANALYSIS',
+        tabId: tabs[0].id,
+        url: this.currentUrl
+      }, 5); // Increased retries for critical operation
+
+      if (response.success) {
+        this.currentJobId = response.jobId;
+        console.log('Analysis started with job ID:', response.jobId);
+        
+        // Cache job info for recovery during background analysis
+        localStorage.setItem('lastJobId', response.jobId);
+        localStorage.setItem('lastJobUrl', this.currentUrl);
+        
+        this.state = { 
+          status: 'scraping',
+          progress: 'Analysis started. You can close this popup and return later.'
+        };
+        this.updateUI();
       } else {
-        this.updateLoadingText('Scraping page content...');
+        throw new Error(response.error || 'Failed to start analysis');
       }
-
-      // Step 3: Scrape page content
-      const scrapingResult = await this.sendMessageToContentScript({ action: 'scrapePage' });
-      
-      if (!scrapingResult.success) {
-        throw new Error(scrapingResult.error || 'Failed to scrape page');
-      }
-
-      const rawData: RawPageData = scrapingResult.data;
-
-      // Step 4: Analyze with LLM
-      this.state = { status: 'analyzing' };
-      this.updateUI();
-      
-      // Update analyzing message based on provider and analysis type
-      if (useFullPage) {
-        this.updateLoadingText('Capturing and analyzing full page...');
-        this.showProgressTracking(true);
-      } else if (settings.provider === 'gemini') {
-        this.updateLoadingText('Analyzing page with visual + content insights...');
-      } else {
-        this.updateLoadingText('Analyzing page content...');
-      }
-
-      const analyzer = new LLMAnalyzer(settings);
-      const analysis = await analyzer.analyzeRawPageData(rawData, useFullPage);
-
-      // Step 5: Cache results
-      const modelName = settings.provider === 'gemini' ? settings.geminiModel : settings.openaiModel;
-      await StorageManager.saveCachedAudit(this.currentUrl, analysis, rawData, modelName);
-
-      // Step 6: Show results
-      this.showProgressTracking(false); // Hide progress tracking
-      this.state = {
-        status: 'ready',
-        analysis,
-        rawData,
-        fromCache: false
-      };
-      this.updateUI();
 
     } catch (error) {
-      console.error('Analysis failed:', error);
-      this.showError(error instanceof Error ? error.message : 'Analysis failed');
+      console.error('Failed to start analysis:', error);
+      this.showError(error instanceof Error ? error.message : 'Failed to start analysis');
     }
   }
 
-  private async sendMessageToContentScript(message: any): Promise<any> {
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tabs[0]?.id) {
-      throw new Error('No active tab found');
+  private async updateJobStatus(job: any): Promise<void> {
+    switch (job.status) {
+      case 'scraping':
+        this.state = { status: 'scraping', progress: job.progress || 'Scraping page content...' };
+        break;
+      case 'analyzing':
+        this.state = { status: 'analyzing', progress: job.progress || 'Analyzing with AI...' };
+        break;
+      case 'completed':
+        // Job completed, check for cached results
+        await this.checkForCachedResults();
+        this.currentJobId = null;
+        
+        // Clear cached job info
+        localStorage.removeItem('lastJobId');
+        localStorage.removeItem('lastJobUrl');
+        break;
+      case 'failed':
+        this.showError(job.error || 'Analysis failed');
+        this.currentJobId = null;
+        
+        // Clear cached job info
+        localStorage.removeItem('lastJobId');
+        localStorage.removeItem('lastJobUrl');
+        break;
     }
+    this.updateUI();
+  }
 
-    const tabId = tabs[0].id;
-
-    // First try to send message to see if content script is already loaded
-    try {
-      return await new Promise((resolve, reject) => {
-        chrome.tabs.sendMessage(tabId, message, (response) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else {
-            resolve(response);
-          }
-        });
-      });
-    } catch (error) {
-      // Content script not loaded, inject it
-      console.log('Content script not found, injecting...');
-      
+  /**
+   * Start polling to resume connection when background becomes available
+   */
+  private startPollingForResumption(): void {
+    let attempts = 0;
+    const maxAttempts = 10; // Try for about 20 seconds
+    
+    const poll = async () => {
+      attempts++;
       try {
-        await chrome.scripting.executeScript({
-          target: { tabId },
-          files: ['content.js']
-        });
-        
-        // Wait a moment for the script to load
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // Try sending the message again
-        return new Promise((resolve, reject) => {
-          chrome.tabs.sendMessage(tabId, message, (response) => {
+        if (this.currentJobId) {
+          const response = await this.sendMessageToBackground({
+            type: 'GET_JOB_STATUS',
+            jobId: this.currentJobId
+          }, 1);
+          
+          if (response?.success) {
+            console.log('Background connection resumed');
+            if (response.job) {
+              this.updateJobStatus(response.job);
+              
+              // If job is completed, clear cache
+              if (response.job.status === 'completed' || response.job.status === 'failed') {
+                localStorage.removeItem('lastJobId');
+                localStorage.removeItem('lastJobUrl');
+              }
+            }
+            return; // Stop polling
+          }
+        }
+      } catch (error) {
+        console.debug(`Polling attempt ${attempts} failed, background still busy`);
+      }
+      
+      if (attempts < maxAttempts) {
+        setTimeout(poll, 2000); // Check every 2 seconds
+      } else {
+        console.warn('Could not resume background connection, giving up');
+        // Clear cached job info
+        localStorage.removeItem('lastJobId');
+        localStorage.removeItem('lastJobUrl');
+        this.state = { status: 'idle' };
+        this.updateUI();
+      }
+    };
+    
+    setTimeout(poll, 2000); // Start polling after 2 seconds
+  }
+
+  /**
+   * Check if URL is valid for analysis
+   */
+  private isValidAnalysisUrl(url: string): boolean {
+    try {
+      const urlObj = new URL(url);
+      
+      // Block restricted protocols
+      const restrictedProtocols = ['chrome:', 'chrome-extension:', 'moz-extension:', 'edge:', 'about:', 'data:', 'file:', 'ftp:'];
+      if (restrictedProtocols.includes(urlObj.protocol)) {
+        return false;
+      }
+      
+      // Only allow http and https
+      if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
+        return false;
+      }
+      
+      // Block localhost/private IPs (optional - you might want to allow these)
+      if (urlObj.hostname === 'localhost' || 
+          urlObj.hostname === '127.0.0.1' || 
+          urlObj.hostname.startsWith('192.168.') ||
+          urlObj.hostname.startsWith('10.') ||
+          urlObj.hostname.startsWith('172.')) {
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Setup message listener for screenshot progress updates
+   */
+  private setupMessageListener(): void {
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message.type === 'SCREENSHOT_PROGRESS') {
+        this.showScreenshotProgress(message.message);
+      } else if (message.type === 'SCREENSHOT_PROGRESS_CLEAR') {
+        this.clearScreenshotProgress();
+      }
+    });
+  }
+
+  /**
+   * Show screenshot progress in popup
+   */
+  private showScreenshotProgress(message: string): void {
+    const progressElement = document.getElementById('screenshot-progress');
+    const messageElement = document.getElementById('screenshot-message');
+    
+    if (progressElement && messageElement) {
+      messageElement.textContent = message;
+      progressElement.classList.remove('hidden');
+    }
+  }
+
+  /**
+   * Clear screenshot progress from popup
+   */
+  private clearScreenshotProgress(): void {
+    const progressElement = document.getElementById('screenshot-progress');
+    if (progressElement) {
+      progressElement.classList.add('hidden');
+    }
+  }
+
+  private async sendMessageToBackground(message: any, maxRetries: number = 3): Promise<any> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await new Promise<any>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Message timeout - background script may be idle'));
+          }, 5000); // 5 second timeout
+
+          chrome.runtime.sendMessage(message, (response) => {
+            clearTimeout(timeout);
+            
             if (chrome.runtime.lastError) {
-              reject(new Error(chrome.runtime.lastError.message));
+              const errorMessage = chrome.runtime.lastError.message || 'Connection failed';
+              // Handle specific service worker idle errors
+              if (errorMessage.includes('message port closed') || 
+                  errorMessage.includes('Extension context invalidated') ||
+                  errorMessage.includes('receiving end does not exist')) {
+                reject(new Error(`Background script idle: ${errorMessage}`));
+              } else {
+                reject(new Error(errorMessage));
+              }
+            } else if (!response) {
+              reject(new Error('No response received from background script'));
             } else {
               resolve(response);
             }
           });
         });
-      } catch (injectionError) {
-        throw new Error(`Failed to inject content script: ${injectionError}`);
+        return response;
+      } catch (error) {
+        const isIdleError = error instanceof Error && 
+          (error.message.includes('Background script idle') || 
+           error.message.includes('message port closed') ||
+           error.message.includes('timeout'));
+           
+        console.warn(`Message attempt ${attempt} failed:`, error);
+        
+        if (attempt === maxRetries) {
+          // For idle errors, return a graceful fallback instead of throwing
+          if (isIdleError && (message.type === 'GET_ALL_JOBS' || message.type === 'GET_JOB_STATUS' || message.type === 'PING')) {
+            console.info('Background script appears idle, returning empty response for:', message.type);
+            return { success: true, jobs: [], job: null };
+          }
+          console.error(`Failed to send message after ${maxRetries} attempts:`, message.type);
+          throw error;
+        }
+        
+        // For idle errors, wait longer to allow service worker to wake up
+        const waitTime = isIdleError ? 
+          1000 * Math.pow(2, attempt) : // 2s, 4s, 8s for idle errors
+          500 * Math.pow(2, attempt - 1); // 500ms, 1s, 2s for other errors
+          
+        await new Promise(resolve => setTimeout(resolve, waitTime));
       }
     }
+    throw new Error('Unexpected end of retry loop');
   }
 
   private updateUI(): void {
     this.hideAllStates();
 
+    // Update button states based on current status
+    const scanButton = document.getElementById('scan-button') as HTMLButtonElement;
+    
     switch (this.state.status) {
       case 'idle':
         this.showState('initial-state');
+        if (scanButton) {
+          scanButton.disabled = false;
+          scanButton.textContent = 'Start Analysis';
+        }
         break;
       case 'scraping':
         this.showState('loading-state');
-        this.updateLoadingText('Scraping page...');
+        this.updateLoadingText(this.state.progress || 'Scraping page...');
+        if (scanButton) {
+          scanButton.disabled = true;
+          scanButton.textContent = 'Analysis in Progress...';
+        }
         break;
       case 'analyzing':
         this.showState('loading-state');
-        this.updateLoadingText('Analyzing with AI...');
+        this.updateLoadingText(this.state.progress || 'Analyzing with AI...');
+        if (scanButton) {
+          scanButton.disabled = true;
+          scanButton.textContent = 'Analysis in Progress...';
+        }
         break;
       case 'ready':
         this.showState('results-state');
         this.populateResults();
+        if (scanButton) {
+          scanButton.disabled = false;
+          scanButton.textContent = 'Start Analysis';
+        }
         break;
       case 'error':
         this.showState('error-state');
+        if (scanButton) {
+          scanButton.disabled = false;
+          scanButton.textContent = 'Start Analysis';
+        }
         break;
     }
   }
