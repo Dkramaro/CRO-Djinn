@@ -55,8 +55,11 @@ export class NotificationManager {
       }
 
       // Create progress notification
+      // Auto-detect notification type based on whether progress is provided
+      const notificationType = options.progress !== undefined ? 'progress' : (options.type || 'basic');
+      
       const notificationOptions: chrome.notifications.NotificationOptions = {
-        type: options.type || 'basic',
+        type: notificationType,
         iconUrl: options.iconUrl || this.ICON_PATH,
         title: options.title,
         message: options.message,
@@ -65,8 +68,8 @@ export class NotificationManager {
         silent: true // Silent for progress updates
       };
 
-      // Add progress bar if supported and progress provided
-      if (options.progress !== undefined && options.type === 'progress') {
+      // Add progress bar if this is a progress notification
+      if (options.progress !== undefined && notificationType === 'progress') {
         (notificationOptions as any).progress = Math.max(0, Math.min(100, options.progress));
       }
 

@@ -403,8 +403,8 @@ export class PageScraper {
   // === CONTENT FILTERING UTILITIES ===
 
   private isTrackingElement(element: Element): boolean {
-    const id = element.id?.toLowerCase() || '';
-    const className = element.className?.toLowerCase() || '';
+    const id = (typeof element.id === 'string' ? element.id : '').toLowerCase();
+    const className = (typeof element.className === 'string' ? element.className : '').toLowerCase();
     
     // Check for tracking-related IDs and classes
     const trackingPatterns = [
@@ -418,6 +418,7 @@ export class PageScraper {
   }
 
   private isTrackingText(text: string): boolean {
+    if (typeof text !== 'string') return false;
     const lowerText = text.toLowerCase();
     
     // Skip tracking/analytics related text
@@ -432,7 +433,7 @@ export class PageScraper {
 
   private isMeaningfulButton(text: string): boolean {
     // Filter out empty or meaningless button text
-    if (!text || text.length === 0) return false;
+    if (!text || typeof text !== 'string' || text.length === 0) return false;
     
     // Skip cookie/consent buttons (not relevant for CRO)
     const skipPatterns = [
@@ -445,7 +446,8 @@ export class PageScraper {
   }
 
   private isMeaningfulLink(text: string, href: string): boolean {
-    if (!text || text.length === 0) return false;
+    if (!text || typeof text !== 'string' || text.length === 0) return false;
+    if (typeof href !== 'string') return false;
     
     const lowerText = text.toLowerCase();
     const lowerHref = href.toLowerCase();

@@ -769,7 +769,7 @@ function cleanFilteredStructuredContent(structuredContent: any): any {
     ...structuredContent,
     // Filter buttons to remove empty/tracking ones
     buttons: structuredContent.buttons?.filter((button: any) => {
-      if (!button.text || button.text.trim() === '') return false;
+      if (!button.text || typeof button.text !== 'string' || button.text.trim() === '') return false;
       
       const lowerText = button.text.toLowerCase();
       const skipPatterns = [
@@ -782,10 +782,10 @@ function cleanFilteredStructuredContent(structuredContent: any): any {
     
     // Filter links to remove footer/legal ones
     links: structuredContent.links?.filter((link: any) => {
-      if (!link.text || link.text.trim() === '') return false;
+      if (!link.text || typeof link.text !== 'string' || link.text.trim() === '') return false;
       
       const lowerText = link.text.toLowerCase();
-      const lowerHref = link.href?.toLowerCase() || '';
+      const lowerHref = (typeof link.href === 'string' ? link.href : '').toLowerCase();
       
       const skipPatterns = [
         'privacy policy', 'terms of use', 'terms of service', 'cookie policy',
@@ -819,6 +819,11 @@ function cleanClassName(className: string): string {
   if (!className) return '';
   
   const classes = className.split(' ').filter((cls: string) => {
+    // Ensure cls is a string and not empty
+    if (!cls || typeof cls !== 'string') {
+      return false;
+    }
+    
     // Remove UUID-like class names
     if (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(cls)) {
       return false;
