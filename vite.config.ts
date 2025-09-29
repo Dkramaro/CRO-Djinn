@@ -47,7 +47,7 @@ export default defineConfig({
         // Fix paths to point to built files
         manifest.action.default_popup = 'src/popup/popup.html';
         manifest.options_page = 'src/options/options.html';
-        manifest.web_accessible_resources[0].resources = ['src/offscreen/offscreen.html', 'src/offscreen/offscreen-minimal.html'];
+        manifest.web_accessible_resources[0].resources = ['src/offscreen/offscreen.html', 'src/offscreen/offscreen-minimal.html', 'icons/*'];
         
         writeFileSync(resolve(__dirname, 'dist/manifest.json'), JSON.stringify(manifest, null, 2));
         
@@ -92,10 +92,24 @@ export default defineConfig({
           const iconsDir = resolve(__dirname, 'dist/icons');
           mkdirSync(iconsDir, { recursive: true });
           
+          // Copy main logo
           copyFileSync(
             resolve(__dirname, 'icons/CRO-Genie Logo.png'),
             resolve(__dirname, 'dist/icons/CRO-Genie Logo.png')
           );
+          
+          // Copy star rating images
+          const starImages = ['1 Star.png', '2 star.png', '3 Star.png'];
+          starImages.forEach(starImage => {
+            try {
+              copyFileSync(
+                resolve(__dirname, `icons/${starImage}`),
+                resolve(__dirname, `dist/icons/${starImage}`)
+              );
+            } catch (error) {
+              console.warn(`Failed to copy star image ${starImage}:`, error.message);
+            }
+          });
         } catch (error) {
           console.warn('Failed to copy icons:', error.message);
         }

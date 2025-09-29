@@ -1,6 +1,24 @@
 import { jsPDF } from 'jspdf';
 import { LLMAnalysis, RawPageData } from '../types';
 
+// Utility function to load PNG images as base64 data URLs
+async function loadImageAsBase64(imagePath: string): Promise<string> {
+  try {
+    const response = await fetch(chrome.runtime.getURL(imagePath));
+    const blob = await response.blob();
+    
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.error(`Failed to load image: ${imagePath}`, error);
+    throw error;
+  }
+}
+
 export class PDFExporter {
   private doc: jsPDF;
   private pageWidth: number;
@@ -22,6 +40,13 @@ export class PDFExporter {
     muted: [number, number, number];
   };
 
+  // Base64-encoded star rating images (PNG)
+  private starImages: {
+    oneStar: string;
+    twoStars: string;
+    threeStars: string;
+  };
+
   constructor() {
     this.doc = new jsPDF('portrait', 'mm', 'a4');
     
@@ -35,20 +60,47 @@ export class PDFExporter {
     this.yPosition = this.margin;
     this.lineHeight = 5;
     
-    // Vibrant color palette matching website's purple-to-yellow gradient theme
+    // Premium enterprise color palette - sophisticated and harmonious
     this.colors = {
-      primary: [138, 43, 226],      // Bright vibrant purple (#8A2BE2)
-      secondary: [160, 32, 240],    // Medium purple accent (#A020F0)
-      success: [255, 215, 0],       // Bright yellow-orange (#FFD700)
-      warning: [255, 193, 7],       // Warm amber (#FFC107)
-      danger: [220, 53, 69],        // Professional red
-      info: [138, 43, 226],         // Purple for info elements
-      text: [33, 37, 41],           // Rich dark text
-      lightGray: [252, 248, 255],   // Very light purple tint
-      background: [255, 255, 255],  // Pure white
-      accent: [255, 215, 0],        // Bright yellow-orange accent
-      muted: [160, 32, 240]         // Purple for muted text
+      primary: [30, 41, 59],        // Rich slate blue for premium authority (#1e293b)
+      secondary: [71, 85, 105],     // Sophisticated slate gray (#475569)
+      success: [21, 128, 61],       // Refined forest green (#15803d) 
+      warning: [217, 119, 6],       // Elegant amber (#d97706)
+      danger: [153, 27, 27],        // Sophisticated burgundy (#991b1b)
+      info: [29, 78, 216],          // Premium sapphire blue (#1d4ed8)
+      text: [15, 23, 42],           // Deep charcoal for maximum readability (#0f172a)
+      lightGray: [248, 250, 252],   // Refined off-white (#f8fafc)
+      background: [255, 255, 255],  // Pure white for clarity
+      accent: [37, 99, 235],        // Refined royal blue (#2563eb)
+      muted: [100, 116, 139]        // Elegant muted slate (#64748b)
     };
+
+    // Initialize star images as empty - will be loaded async
+    this.starImages = {
+      oneStar: '',
+      twoStars: '',
+      threeStars: ''
+    };
+  }
+
+  // Load PNG star images from the icons folder
+  private async loadStarImages(): Promise<void> {
+    try {
+      const [oneStar, twoStars, threeStars] = await Promise.all([
+        loadImageAsBase64('icons/1 Star.png'),
+        loadImageAsBase64('icons/2 star.png'),
+        loadImageAsBase64('icons/3 Star.png')
+      ]);
+      
+      this.starImages = {
+        oneStar,
+        twoStars,
+        threeStars
+      };
+    } catch (error) {
+      console.error('Failed to load star images:', error);
+      // Keep empty strings as fallback
+    }
   }
 
   async exportAudit(
@@ -56,6 +108,8 @@ export class PDFExporter {
     rawData: RawPageData,
     timestamp: number
   ): Promise<void> {
+    // Load star images before generating PDF
+    await this.loadStarImages();
     // Professional header without any branding
     this.addProfessionalHeader();
     
@@ -95,12 +149,12 @@ export class PDFExporter {
   }
 
   private addProfessionalHeader(): void {
-    // Vibrant header with purple gradient effect matching website theme
-    this.doc.setFillColor(252, 248, 255); // Very light purple tint
+    // Professional header with clean modern theme
+    this.doc.setFillColor(...this.colors.lightGray); // Clean off-white background
     this.doc.rect(0, 0, this.pageWidth, 40, 'F');
     
-    // Add subtle gradient effect with purple accent line at bottom
-    this.doc.setDrawColor(160, 32, 240); // Medium purple
+    // Add subtle gradient effect with professional blue accent line at bottom
+    this.doc.setDrawColor(...this.colors.accent); // Professional blue accent
     this.doc.setLineWidth(1);
     this.doc.line(0, 40, this.pageWidth, 40);
     
@@ -120,8 +174,8 @@ export class PDFExporter {
   }
 
   private addPageMetadata(rawData: RawPageData, starRating: 1 | 2 | 3, timestamp: number): void {
-    // Beautiful metadata section with purple-tinted styling matching website theme
-    this.doc.setFillColor(252, 248, 255); // Very light purple tint
+    // Beautiful metadata section with professional styling
+    this.doc.setFillColor(...this.colors.lightGray); // Clean off-white background
     this.doc.roundedRect(this.margin - 8, this.yPosition - 6, this.pageWidth - (2 * this.margin) + 16, 35, 6, 6, 'F');
     
     // Add subtle border
@@ -131,7 +185,7 @@ export class PDFExporter {
     
     // Left side content
     // Page title
-    this.doc.setTextColor(...this.colors.primary);
+    this.doc.setTextColor(...this.colors.accent);
     this.doc.setFont('helvetica', 'bold');
     this.doc.setFontSize(11);
     this.doc.text('Page:', this.margin, this.yPosition + 2);
@@ -142,7 +196,7 @@ export class PDFExporter {
     
     // URL
     this.yPosition += 10;
-    this.doc.setTextColor(...this.colors.primary);
+    this.doc.setTextColor(...this.colors.accent);
     this.doc.setFont('helvetica', 'bold');
     this.doc.text('URL:', this.margin, this.yPosition + 2);
     this.doc.setTextColor(...this.colors.text);
@@ -155,7 +209,7 @@ export class PDFExporter {
     
     // Date
     this.yPosition += 10;
-    this.doc.setTextColor(...this.colors.primary);
+    this.doc.setTextColor(...this.colors.accent);
     this.doc.setFont('helvetica', 'bold');
     this.doc.setFontSize(11);
     this.doc.text('Date:', this.margin, this.yPosition + 2);
@@ -167,38 +221,47 @@ export class PDFExporter {
       day: 'numeric'
     }), this.margin + 28, this.yPosition + 2);
     
-    // Right side - Compact rating box positioned at top right
-    const ratingBoxX = this.pageWidth - 55;
-    const ratingBoxY = 12; // Fixed position at top of page
+    // Right side - Star rating images centered and hugging right margin
+    const starImageX = this.pageWidth - this.margin - 24; // Hug right margin (24mm = image width)
+    const starImageY = 16; // Centered vertically in 40mm header (40-8)/2 = 16mm from top
     
-    // Vibrant color scheme for rating matching website theme
-    let ratingColor: [number, number, number];
-    let ratingLabel: string;
+    // Select appropriate star image based on rating
+    let starImageData: string;
     if (starRating === 3) {
-      ratingColor = [255, 215, 0]; // Bright yellow-orange for excellent
-      ratingLabel = 'Excellent';
+      starImageData = this.starImages.threeStars;
     } else if (starRating === 2) {
-      ratingColor = [160, 32, 240]; // Medium purple for good
-      ratingLabel = 'Good';
+      starImageData = this.starImages.twoStars;
     } else {
-      ratingColor = [138, 43, 226]; // Bright purple for needs work
-      ratingLabel = 'Needs Work';
+      starImageData = this.starImages.oneStar;
     }
     
-    this.doc.setFillColor(...ratingColor);
-    this.doc.roundedRect(ratingBoxX, ratingBoxY, 45, 15, 3, 3, 'F');
-    
-    // Compact rating content
-    this.doc.setTextColor(255, 255, 255);
-    this.doc.setFont('helvetica', 'bold');
-    this.doc.setFontSize(7);
-    this.doc.text('Rating', ratingBoxX + 2, ratingBoxY + 6);
-    
-    // Compact star display
-    this.doc.setFontSize(8);
-    this.doc.text(`${starRating}/3 Stars`, ratingBoxX + 2, ratingBoxY + 12);
+    // Add star image to PDF (reduced size by 60% = 40% of original)
+    this.addStarImage(starImageData, starImageX, starImageY, 24, 8);
     
     this.yPosition += 12; // Further reduced to bring Page Overview section closer
+  }
+
+  private addStarImage(imageData: string, x: number, y: number, width: number, height: number): void {
+    try {
+      if (imageData && imageData.length > 0) {
+        // Add PNG image to PDF using jsPDF's addImage method
+        this.doc.addImage(imageData, 'PNG', x, y, width, height);
+      } else {
+        // No image data available, show fallback
+        this.addStarImageFallback(x, y);
+      }
+    } catch (error) {
+      console.warn('Failed to add star image to PDF, falling back to text:', error);
+      this.addStarImageFallback(x, y);
+    }
+  }
+
+  private addStarImageFallback(x: number, y: number): void {
+    // Fallback to text-based star rating display
+    this.doc.setTextColor(...this.colors.accent);
+    this.doc.setFont('helvetica', 'bold');
+    this.doc.setFontSize(10);
+    this.doc.text('Rating', x + 5, y + 12);
   }
 
   private addPageOverviewSection(pageSummary: any): void {
@@ -214,7 +277,7 @@ export class PDFExporter {
     ];
     
     details.forEach(detail => {
-      this.doc.setTextColor(...this.colors.primary);
+      this.doc.setTextColor(...this.colors.accent);
       this.doc.setFont('helvetica', 'bold');
       this.doc.setFontSize(10);
       this.doc.text(detail.label, this.margin, this.yPosition);
@@ -271,7 +334,7 @@ export class PDFExporter {
       const maxWidth = this.pageWidth - (2 * this.margin) - 10; // Account for numbering
       pageSummary.currentUserJourney.forEach((step: string, index: number) => {
         // Add step number
-        this.doc.setTextColor(...this.colors.primary);
+        this.doc.setTextColor(...this.colors.accent);
         this.doc.setFont('helvetica', 'bold');
         this.doc.text(`${index + 1}.`, this.margin, this.yPosition);
         
@@ -308,7 +371,7 @@ export class PDFExporter {
   }
 
   private addSubsectionHeader(title: string): void {
-    this.doc.setTextColor(...this.colors.primary);
+    this.doc.setTextColor(...this.colors.accent);
     this.doc.setFont('helvetica', 'bold');
     this.doc.setFontSize(11);
     this.doc.text(title, this.margin, this.yPosition);
@@ -337,8 +400,8 @@ export class PDFExporter {
 
     // Process Strengths first
     if (pageSummary.keyStrengths && pageSummary.keyStrengths.length > 0) {
-      // Add "Key Strengths" header in green
-      this.doc.setTextColor(34, 197, 94); // Green color
+      // Add "Key Strengths" header in professional emerald
+      this.doc.setTextColor(...this.colors.success); // Professional emerald green
       this.doc.setFont('helvetica', 'bold');
       this.doc.setFontSize(14);
       this.doc.text('Key Strengths', this.margin, this.yPosition);
@@ -361,16 +424,16 @@ export class PDFExporter {
         
         calculatedHeight += 1; // Bottom buffer
         
-        // Draw container first with calculated height (green styling for strengths)
-        this.doc.setFillColor(248, 255, 248); // Very light green tint
+        // Draw container first with calculated height (refined green styling for strengths)
+        this.doc.setFillColor(240, 253, 244); // Elegant light green tint
         this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'F');
         
-        this.doc.setDrawColor(144, 238, 144); // Light green border
+        this.doc.setDrawColor(22, 163, 74); // Refined forest green border
         this.doc.setLineWidth(0.3);
         this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'S');
         
-        // Green vertical accent bar on the left (for strengths)
-        this.doc.setFillColor(34, 197, 94); // Green color
+        // Professional emerald vertical accent bar on the left (for strengths)
+        this.doc.setFillColor(...this.colors.success); // Professional emerald green
         this.doc.roundedRect(this.margin - 2, this.yPosition - 1, 4, calculatedHeight, 0, 0, 'F');
         
         // Now add text content on top of the container
@@ -406,14 +469,14 @@ export class PDFExporter {
       this.yPosition += 15; // More space from Key Strengths section
       
       // Add "Critical Issues" header with visual prominence
-      this.doc.setTextColor(239, 68, 68); // Red color
+      this.doc.setTextColor(...this.colors.danger); // Professional red
       this.doc.setFont('helvetica', 'bold');
       this.doc.setFontSize(16); // Larger font size for prominence
       
       // Add a subtle background highlight for the header
       const headerText = 'Critical Issues';
       const headerWidth = this.doc.getTextWidth(headerText);
-      this.doc.setFillColor(255, 248, 248); // Very light red background
+      this.doc.setFillColor(254, 242, 242); // Sophisticated light burgundy background
       this.doc.roundedRect(this.margin - 4, this.yPosition - 2, headerWidth + 8, 8, 2, 2, 'F');
       
       // Draw the header text
@@ -437,16 +500,16 @@ export class PDFExporter {
         
         calculatedHeight += 1; // Bottom buffer
         
-        // Draw container first with calculated height (red styling for issues)
-        this.doc.setFillColor(255, 248, 248); // Very light red tint
+        // Draw container first with calculated height (sophisticated burgundy styling for issues)
+        this.doc.setFillColor(254, 242, 242); // Elegant light burgundy tint
         this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'F');
         
-        this.doc.setDrawColor(252, 165, 165); // Light red border
+        this.doc.setDrawColor(220, 38, 38); // Refined burgundy border
         this.doc.setLineWidth(0.3);
         this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'S');
         
-        // Red vertical accent bar on the left (for issues)
-        this.doc.setFillColor(239, 68, 68); // Red color
+        // Professional red vertical accent bar on the left (for issues)
+        this.doc.setFillColor(...this.colors.danger); // Professional red
         this.doc.roundedRect(this.margin - 2, this.yPosition - 1, 4, calculatedHeight, 0, 0, 'F');
         
         // Now add text content on top of the container
@@ -514,7 +577,7 @@ export class PDFExporter {
       this.doc.setLineWidth(0.3);
       this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'S');
       
-      // Purple vertical accent bar on the left (matching Copy Suggestions)
+      // Charcoal vertical accent bar on the left (matching Copy Suggestions)
       this.doc.setFillColor(...this.colors.primary);
       this.doc.roundedRect(this.margin - 2, this.yPosition - 1, 4, calculatedHeight, 0, 0, 'F');
       
@@ -542,10 +605,10 @@ export class PDFExporter {
           const label = labelMatch[1]; // e.g., "Context:"
           const content = labelMatch[2]; // e.g., "Direct-to-consumer telehealth homepage..."
           
-          // Draw label in purple
+          // Draw label in vibrant blue
           this.doc.setFont('helvetica', 'bold');
           this.doc.setFontSize(10);
-          this.doc.setTextColor(...this.colors.primary); // Purple color
+          this.doc.setTextColor(...this.colors.accent); // Vibrant blue color
           this.doc.text(label, this.margin + 6, textY);
           
           // Draw content in black right after the label (if there's content after the colon)
@@ -586,20 +649,15 @@ export class PDFExporter {
     this.addSectionHeaderProfessional('Priority Recommendations');
     
     topRecommendations.forEach((rec, index) => {
-      // Calculate text width for content - use the same calculation as other sections
-      let safeTextWidth = this.pageWidth - (2 * this.margin) - 20; // Standard width calculation
+      // Calculate text width based on actual card and text positioning
+      // Card boundaries: (margin-2) to (pageWidth-margin+2), total width = pageWidth - (2*margin) + 4
+      // Text starts at: margin+6 (6pt from left card edge)
+      // Text should end: 6pt from right card edge
+      // Available text width = card width - 12pt total padding
+      const safeTextWidth = this.pageWidth - (2 * this.margin) - 8; // More generous width for better text flow
       
-      // FORCE FIX: Make the first card use a slightly larger width to prevent cutoff
-      if (index === 0) {
-        safeTextWidth = this.pageWidth - (2 * this.margin) + 30; // Add 30pt extra width for first card
-      }
-      
-      // SEPARATE WIDTH for Implementation and Why sections on first card only
-      let implementationWhyWidth = safeTextWidth; // Default to same as safeTextWidth
-      if (index === 0) {
-        // For first card, use standard width for Implementation and Why sections to prevent overlap
-        implementationWhyWidth = this.pageWidth - (2 * this.margin) - 20; // Standard width
-      }
+      // Use same width for implementation and why sections to maintain consistency
+      const implementationWhyWidth = safeTextWidth;
       
       // Store starting position for dynamic height calculation
       const cardStartY = this.yPosition;
@@ -607,13 +665,23 @@ export class PDFExporter {
       // First, calculate the height by simulating content placement
       let calculatedHeight = 0; // Start with no padding
       
-      // Calculate title height - apply intelligent width constraint specifically for title only
+      // Set consistent font settings for accurate text width calculations
+      this.doc.setFont('helvetica', 'bold');
+      this.doc.setFontSize(14);
+      this.doc.setCharSpace(0);
+      
+      // Calculate title height - use same width as content for consistency  
       const titleText = `${index + 1}. ${rec.title}`;
-      const titleTextWidth = this.calculateOptimalTitleWidth(titleText, index);
+      const titleTextWidth = safeTextWidth; // Use full available width
       const wrappedTitle = this.wrapText(titleText, titleTextWidth);
       calculatedHeight += 8; // Text starts 8pt from card top (increased from 3)
       calculatedHeight += (wrappedTitle.length * 5); // Increased line spacing for larger font
       calculatedHeight += 12; // Space for badges (increased from 8)
+      
+      // Set consistent font settings for issue/solution text calculations
+      this.doc.setFont('helvetica', 'normal');
+      this.doc.setFontSize(10);
+      this.doc.setCharSpace(0);
       
       // Calculate content sections height - use full text width
       const issueText = this.wrapText(rec.issue || rec.currentState || '', safeTextWidth);
@@ -628,9 +696,19 @@ export class PDFExporter {
       // Add height for implementation section if available
       if (rec.implementation || rec.implementationDetails || rec.how) {
         calculatedHeight += 8; // Section header spacing
+        
+        // Set consistent font for implementation text calculations
+        this.doc.setFont('helvetica', 'normal');
+        this.doc.setFontSize(10);
+        this.doc.setCharSpace(0);
+        
         const implementationData = rec.implementation || rec.implementationDetails || rec.how;
         if (Array.isArray(implementationData)) {
           implementationData.forEach((step) => {
+            // Ensure consistent font settings for each step
+            this.doc.setFont('helvetica', 'normal');
+            this.doc.setFontSize(10);
+            this.doc.setCharSpace(0);
             const stepText = this.wrapText(step, implementationWhyWidth - 9); // Account for bullet point spacing
             calculatedHeight += (stepText.length * 4.2);
             calculatedHeight += 2; // Between steps
@@ -645,6 +723,12 @@ export class PDFExporter {
       // Add height for psychology section if available
       if (rec.psychologyBehind || rec.psychology || rec.why) {
         calculatedHeight += 8; // Section header spacing
+        
+        // Set consistent font for psychology text calculations
+        this.doc.setFont('helvetica', 'normal');
+        this.doc.setFontSize(10);
+        this.doc.setCharSpace(0);
+        
         const psychologyData = rec.psychologyBehind || rec.psychology || rec.why;
         const psychologyText = this.wrapText(psychologyData, implementationWhyWidth);
         calculatedHeight += (psychologyText.length * 4.2);
@@ -671,13 +755,13 @@ export class PDFExporter {
       this.doc.setLineWidth(0.5);
       this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'S');
       
-      // Purple vertical accent bar on the left - sharp right angles
+      // Charcoal vertical accent bar on the left - sharp right angles
       this.doc.setFillColor(...this.colors.primary);
       this.doc.rect(this.margin - 2, this.yPosition - 1, 4, calculatedHeight, 'F');
       
       // Now add text content on top of the container
-      // Recommendation title in purple
-      this.doc.setTextColor(...this.colors.primary);
+      // Recommendation title in vibrant blue accent
+      this.doc.setTextColor(...this.colors.accent);
       this.doc.setFont('helvetica', 'bold');
       this.doc.setFontSize(14); // Increased from 11 to 14 for bigger title
       
@@ -693,6 +777,7 @@ export class PDFExporter {
       // Single compact badge row with color coding by priority
       this.doc.setFontSize(8);
       this.doc.setFont('helvetica', 'bold');
+      this.doc.setCharSpace(0);
       
       // Calculate badge position
       const badgeY = titleY + 2;
@@ -705,7 +790,10 @@ export class PDFExporter {
       // Get priority-based color for the badge
       const priorityColor = this.getPriorityColor(rec.priority);
       
-      // Calculate badge width based on text
+      // Calculate badge width based on text with consistent font settings
+      this.doc.setFont('helvetica', 'bold');
+      this.doc.setFontSize(8);
+      this.doc.setCharSpace(0);
       const badgeTextWidth = this.doc.getTextWidth(badgeText);
       const badgeWidth = badgeTextWidth + 12; // Add padding
       
@@ -713,19 +801,26 @@ export class PDFExporter {
       this.doc.setFillColor(...priorityColor);
       this.doc.roundedRect(this.margin + 6, badgeY, badgeWidth, 8, 2, 2, 'F');
       this.doc.setTextColor(255, 255, 255);
+      this.doc.setFont('helvetica', 'bold');
+      this.doc.setFontSize(8);
+      this.doc.setCharSpace(0);
       this.doc.text(badgeText, this.margin + 8, badgeY + 5.5); // Center text vertically in 8pt badge
       
       let textY = badgeY + 18; // Increased space after badge for better visual separation
       
       // Issue section
-      this.doc.setTextColor(220, 53, 69); // Red color for ISSUE label
+      this.doc.setTextColor(...this.colors.danger); // Professional red for ISSUE label
       this.doc.setFont('helvetica', 'bold');
       this.doc.setFontSize(10);
+      this.doc.setCharSpace(0);
       this.doc.text('ISSUE:', this.margin + 6, textY);
       textY += 8;
       
+      // Ensure consistent font settings for issue text
       this.doc.setTextColor(0, 0, 0);
       this.doc.setFont('helvetica', 'normal');
+      this.doc.setFontSize(10);
+      this.doc.setCharSpace(0);
       issueText.forEach((line) => {
         const cleanLine = this.sanitizeTextForPDF(line);
         const safeLine = cleanLine.replace(/[^\x20-\x7E]/g, '');
@@ -736,14 +831,18 @@ export class PDFExporter {
       textY += 6; // Space between sections
       
       // Solution section
-      this.doc.setTextColor(34, 197, 94); // Green color for SOLUTION label
+      this.doc.setTextColor(...this.colors.success); // Professional emerald for SOLUTION label
       this.doc.setFont('helvetica', 'bold');
       this.doc.setFontSize(10);
+      this.doc.setCharSpace(0);
       this.doc.text('SOLUTION:', this.margin + 6, textY);
       textY += 8;
       
+      // Ensure consistent font settings for solution text
       this.doc.setTextColor(0, 0, 0);
       this.doc.setFont('helvetica', 'normal');
+      this.doc.setFontSize(10);
+      this.doc.setCharSpace(0);
       solutionText.forEach((line) => {
         const cleanLine = this.sanitizeTextForPDF(line);
         const safeLine = cleanLine.replace(/[^\x20-\x7E]/g, '');
@@ -755,9 +854,10 @@ export class PDFExporter {
       
       // How to implement section (if available)
       if (rec.implementation || rec.implementationDetails || rec.how) {
-        this.doc.setTextColor(...this.colors.primary);
+        this.doc.setTextColor(...this.colors.accent);
         this.doc.setFont('helvetica', 'bold');
         this.doc.setFontSize(10);
+        this.doc.setCharSpace(0);
         this.doc.text('HOW TO IMPLEMENT:', this.margin + 6, textY);
         textY += 8;
         
@@ -769,13 +869,17 @@ export class PDFExporter {
           // Handle array of implementation steps
           implementationData.forEach((step) => {
             // Bullet point
-            this.doc.setTextColor(...this.colors.primary);
+            this.doc.setTextColor(...this.colors.accent);
             this.doc.setFont('helvetica', 'bold');
+            this.doc.setFontSize(10);
+            this.doc.setCharSpace(0);
             this.doc.text('-', this.margin + 8, textY);
             
-            // Step text
+            // Step text - ensure consistent font settings before wrapping
             this.doc.setTextColor(0, 0, 0);
             this.doc.setFont('helvetica', 'normal');
+            this.doc.setFontSize(10);
+            this.doc.setCharSpace(0);
             const stepText = this.wrapText(step, implementationWhyWidth - 9);
             stepText.forEach((line) => {
               const cleanLine = this.sanitizeTextForPDF(line);
@@ -786,7 +890,10 @@ export class PDFExporter {
             textY += 2; // Space between steps
           });
         } else {
-          // Handle string implementation
+          // Handle string implementation - ensure consistent font settings
+          this.doc.setFont('helvetica', 'normal');
+          this.doc.setFontSize(10);
+          this.doc.setCharSpace(0);
           const implementationText = this.wrapText(implementationData, implementationWhyWidth);
           implementationText.forEach((line) => {
             const cleanLine = this.sanitizeTextForPDF(line);
@@ -800,14 +907,18 @@ export class PDFExporter {
       
       // Why this works section (if available)
       if (rec.psychologyBehind || rec.psychology || rec.why) {
-        this.doc.setTextColor(...this.colors.primary);
+        this.doc.setTextColor(...this.colors.accent);
         this.doc.setFont('helvetica', 'bold');
         this.doc.setFontSize(10);
+        this.doc.setCharSpace(0);
         this.doc.text('WHY THIS WORKS:', this.margin + 6, textY);
         textY += 8;
         
+        // Ensure consistent font settings for psychology text
         this.doc.setTextColor(0, 0, 0);
         this.doc.setFont('helvetica', 'normal');
+        this.doc.setFontSize(10);
+        this.doc.setCharSpace(0);
         const psychologyData = rec.psychologyBehind || rec.psychology || rec.why;
         const psychologyText = this.wrapText(psychologyData, implementationWhyWidth);
         psychologyText.forEach((line) => {
@@ -866,13 +977,13 @@ export class PDFExporter {
       this.doc.setLineWidth(0.3);
       this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'S');
       
-      // Purple vertical accent bar on the left (matching Quick Wins)
+      // Charcoal vertical accent bar on the left (matching Quick Wins)
       this.doc.setFillColor(...this.colors.primary);
       this.doc.roundedRect(this.margin - 2, this.yPosition - 1, 4, calculatedHeight, 0, 0, 'F');
       
       // Now add text content on top of the container
-      // Section name (e.g., "Title", "Bullet 1") with purple styling
-      this.doc.setTextColor(...this.colors.primary); // Purple text for theme
+      // Section name (e.g., "Title", "Bullet 1") with blue accent styling
+      this.doc.setTextColor(...this.colors.accent); // Blue accent text for theme
       this.doc.setFont('helvetica', 'bold');
       this.doc.setFontSize(11);
       
@@ -882,7 +993,7 @@ export class PDFExporter {
         this.doc.setCharSpace(0);
         this.doc.setFont('helvetica', 'bold');
         this.doc.setFontSize(11);
-        this.doc.setTextColor(...this.colors.primary); // Ensure purple text
+        this.doc.setTextColor(...this.colors.accent); // Ensure blue accent text
         
         // Preserve important characters by using a more selective approach
         const safeLine = cleanLine.replace(/[^\x20-\x7E]/g, ''); // Only remove non-printable characters
@@ -979,13 +1090,13 @@ export class PDFExporter {
       this.doc.setLineWidth(0.3);
       this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'S');
       
-      // Purple vertical accent bar on the left (like executive summary)
+      // Charcoal vertical accent bar on the left (like executive summary)
       this.doc.setFillColor(...this.colors.primary);
       this.doc.roundedRect(this.margin - 2, this.yPosition - 1, 4, calculatedHeight, 0, 0, 'F');
       
       // Now add text content on top of the container
       // Title and effort/timeline on the same line (matching popup layout)
-      this.doc.setTextColor(...this.colors.primary); // Purple text for theme
+      this.doc.setTextColor(...this.colors.accent); // Blue accent text for theme
       this.doc.setFont('helvetica', 'bold');
       this.doc.setFontSize(11);
       
@@ -997,15 +1108,15 @@ export class PDFExporter {
         this.doc.setCharSpace(0);
         this.doc.setFont('helvetica', 'bold');
         this.doc.setFontSize(11);
-        this.doc.setTextColor(...this.colors.primary); // Ensure purple text
+        this.doc.setTextColor(...this.colors.accent); // Ensure blue accent text
         
         const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%[0-9A-F]{2}/g, '');
         this.doc.text(encodedLine || cleanLine, this.margin + 6, titleY);
         titleY += 5;
       });
       
-      // Add effort/timeline on the same line as the first title line
-      this.doc.setTextColor(160, 160, 160); // Lighter gray text for more subtle appearance
+      // Add effort/timeline on the same line as the first title line  
+      this.doc.setTextColor(...this.colors.muted); // Elegant muted slate for subtle metadata
       this.doc.setFont('helvetica', 'normal');
       this.doc.setFontSize(7); // Smaller font size
       
@@ -1023,7 +1134,7 @@ export class PDFExporter {
       
       // What to do section with inline label
       if (win.description) {
-        this.doc.setTextColor(...this.colors.primary); // Purple text for "What to do:" label
+        this.doc.setTextColor(...this.colors.accent); // Blue accent text for "What to do:" label
         this.doc.setFont('helvetica', 'bold');
         this.doc.setFontSize(10);
         this.doc.text('What to do:', this.margin + 6, this.yPosition);
@@ -1058,7 +1169,7 @@ export class PDFExporter {
       
       // Why section with inline label
       if (win.rationale) {
-        this.doc.setTextColor(...this.colors.primary); // Purple text for "Why:" label
+        this.doc.setTextColor(...this.colors.accent); // Blue accent text for "Why:" label
         this.doc.setFont('helvetica', 'bold');
         this.doc.setFontSize(10);
         this.doc.text('Why:', this.margin + 6, this.yPosition);
@@ -1133,11 +1244,11 @@ export class PDFExporter {
     // Store starting position for dynamic height calculation
     const cardStartY = this.yPosition;
     
-    // Define colors for different sections
+    // Premium enterprise colors for visual analysis sections - sophisticated and harmonious
     const sectionColors: Array<{ bg: [number, number, number]; border: [number, number, number]; accent: [number, number, number] }> = [
-      { bg: [240, 248, 255], border: [100, 149, 237], accent: [100, 149, 237] }, // Blue for Visual Flow
-      { bg: [240, 255, 240], border: [34, 139, 34], accent: [34, 139, 34] },     // Green for Color & Contrast
-      { bg: [255, 240, 240], border: [220, 20, 60], accent: [220, 20, 60] }      // Red for Critical Issue
+      { bg: [239, 246, 255], border: [59, 130, 246], accent: [29, 78, 216] },    // Premium sapphire blue for Visual Flow  
+      { bg: [236, 253, 245], border: [34, 197, 94], accent: [21, 128, 61] },     // Refined forest green for Color & Contrast
+      { bg: [254, 242, 242], border: [220, 38, 38], accent: [153, 27, 27] }      // Sophisticated burgundy for Critical Issue
     ];
     
     const colors = sectionColors[index % sectionColors.length];
@@ -1283,8 +1394,8 @@ export class PDFExporter {
           this.doc.text(`${cleanLabel}:`, this.margin, this.yPosition);
           this.yPosition += 4; // Normal spacing
           
-          // Add value with wrapping in dark gray for better readability
-          this.doc.setTextColor(40, 40, 40);
+          // Add value with wrapping in refined charcoal for premium readability
+          this.doc.setTextColor(...this.colors.text);
           this.doc.setFont('helvetica', 'normal');
           this.doc.setFontSize(9);
           const valueLines = this.wrapText(cleanValue, safeTextWidth - 20);
@@ -1293,7 +1404,7 @@ export class PDFExporter {
             this.doc.setCharSpace(0);
             this.doc.setFont('helvetica', 'normal');
             this.doc.setFontSize(9);
-            this.doc.setTextColor(40, 40, 40); // Dark gray for better readability
+            this.doc.setTextColor(...this.colors.text); // Premium deep charcoal for optimal readability
             
             const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%[0-9A-F]{2}/g, '');
             this.doc.text(encodedLine || cleanLine, this.margin + 2, this.yPosition);
@@ -1481,7 +1592,7 @@ export class PDFExporter {
   }
 
   private checkNewPage(requiredSpace: number): boolean {
-    // Improved space calculation to prevent purple box cut-offs
+    // Improved space calculation to prevent charcoal box cut-offs
     const bottomMargin = this.margin + 25; // Increased bottom margin to prevent cut-offs
     const availableSpace = this.pageHeight - bottomMargin;
     
@@ -1496,11 +1607,11 @@ export class PDFExporter {
 
   private getPriorityColor(priority: string): [number, number, number] {
     switch (priority) {
-      case 'critical': return [220, 53, 69]; // Match ISSUE text color for critical
-      case 'high': return this.colors.warning; // Keep current yellow for high
-      case 'medium': return [100, 100, 100]; // Neutral gray for medium
-      case 'low': return [120, 120, 120]; // Light gray for low
-      default: return [100, 100, 100]; // Neutral gray for default
+      case 'critical': return this.colors.danger; // Sophisticated burgundy for critical
+      case 'high': return this.colors.warning; // Elegant amber for high  
+      case 'medium': return this.colors.info; // Premium sapphire blue for medium
+      case 'low': return this.colors.muted; // Refined muted slate for low
+      default: return this.colors.secondary; // Sophisticated slate gray for default
     }
   }
 
@@ -1517,28 +1628,6 @@ export class PDFExporter {
     }
   }
 
-  private calculateOptimalTitleWidth(titleText: string, index: number): number {
-    // Set font to match title rendering for accurate width calculation
-    this.doc.setFont('helvetica', 'bold');
-    this.doc.setFontSize(14);
-    
-    // Calculate available width within card boundaries
-    const cardWidth = this.pageWidth - (2 * this.margin) + 4; // Full card width
-    const leftMargin = 6; // Space from purple bar
-    const rightMargin = 6; // Space from card edge
-    const availableWidth = cardWidth - leftMargin - rightMargin;
-    
-    // For first recommendation, use slightly more conservative width
-    // For subsequent recommendations, use standard width
-    const widthMultiplier = index === 0 ? 0.85 : 0.90; // 85% for first, 90% for others
-    const optimalWidth = availableWidth * widthMultiplier;
-    
-    // Ensure minimum width for readability
-    const minWidth = 100;
-    const maxWidth = availableWidth - 10; // Leave some buffer
-    
-    return Math.max(minWidth, Math.min(optimalWidth, maxWidth));
-  }
 
   private cleanText(text: string): string {
     // Replace problematic Unicode characters with ASCII alternatives
@@ -1575,7 +1664,7 @@ export class PDFExporter {
   }
 
   private calculateRecommendationHeightSafe(rec: any, textWidth: number): number {
-    const titleLines = this.wrapText(`${rec.title}`, this.pageWidth - (2 * this.margin) - 15);
+    const titleLines = this.wrapText(`${rec.title}`, textWidth); // Use consistent width
     const issueLines = this.wrapText(rec.issue || rec.currentState, textWidth);
     const solutionLines = this.wrapText(rec.solution || rec.proposedChange, textWidth);
     
@@ -1613,7 +1702,7 @@ export class PDFExporter {
   }
 
   private calculateCopySuggestionHeightSafe(suggestion: any, textWidth: number): number {
-    const sectionLines = this.wrapText(suggestion.section, this.pageWidth - (2 * this.margin) - 15);
+    const sectionLines = this.wrapText(suggestion.section, textWidth); // Use consistent width
     const suggestionLines = this.wrapText(suggestion.suggestion, textWidth);
     // Significantly reduced padding for compact layout
     return 16 + (sectionLines.length * 5) + (suggestionLines.length * 4);
@@ -1621,7 +1710,7 @@ export class PDFExporter {
 
 
   private calculateQuickWinHeight(win: any, textWidth: number): number {
-    const titleLines = this.wrapText(win.title, this.pageWidth - (2 * this.margin) - 15);
+    const titleLines = this.wrapText(win.title, textWidth); // Use consistent width
     const descriptionLines = win.description || win.rationale ? 
       this.wrapText(win.description || win.rationale, textWidth) : [];
     // Compact padding for quick wins
@@ -1629,7 +1718,7 @@ export class PDFExporter {
   }
 
   private calculateQuickWinHeightMinimalist(win: any, textWidth: number): number {
-    const titleLines = this.wrapText(win.title, this.pageWidth - (2 * this.margin) - 15);
+    const titleLines = this.wrapText(win.title, textWidth); // Use consistent width
     const descriptionLines = win.description ? 
       this.wrapText(win.description, textWidth) : [];
     const rationaleLines = win.rationale ? 
@@ -1646,7 +1735,7 @@ export class PDFExporter {
   }
 
   private calculateQuickWinHeightModern(win: any, textWidth: number): number {
-    // Calculate height for clean design with purple bar
+    // Calculate height for clean design with charcoal bar
     const cleanTitle = this.sanitizeTextForPDF(win.title || '');
     const titleLines = this.wrapText(cleanTitle, textWidth - 10);
     
@@ -1656,7 +1745,7 @@ export class PDFExporter {
     const cleanRationale = this.sanitizeTextForPDF(win.rationale || '');
     const rationaleLines = this.wrapText(cleanRationale, textWidth - 10);
     
-    // Height calculation for clean design with purple bar
+    // Height calculation for clean design with charcoal bar
     let totalHeight = 3; // Top padding
     totalHeight += (titleLines.length * 5) + 2; // Title lines + spacing
     totalHeight += (descriptionLines.length * 4) + 2; // Description lines + spacing

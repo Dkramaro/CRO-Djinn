@@ -37,7 +37,7 @@
   },
   "options_page": "src/options/options.html",
   "web_accessible_resources": [{
-    "resources": ["src/offscreen/offscreen.html"],
+    "resources": ["src/offscreen/offscreen.html", "icons/*"],
     "matches": ["<all_urls>"]
   }],
   "content_security_policy": {
