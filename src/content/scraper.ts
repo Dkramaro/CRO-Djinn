@@ -130,7 +130,7 @@ export class PageScraper {
         const styles = window.getComputedStyle(heading);
         
         headings.push({
-          tag: heading.tagName.toLowerCase(),
+          tag: heading.tagName?.toLowerCase() || '',
           text,
           visible: this.isVisible(heading),
           position: {
@@ -170,7 +170,7 @@ export class PageScraper {
       
       buttons.push({
         text,
-        tag: button.tagName.toLowerCase(),
+        tag: button.tagName?.toLowerCase() || '',
         type: (button as HTMLInputElement).type || 'button',
         visible: this.isVisible(button),
         position: {
@@ -251,7 +251,7 @@ export class PageScraper {
         const inputs = Array.from(form.querySelectorAll('input, select, textarea')).map(input => {
           const rect = input.getBoundingClientRect();
     return {
-            tag: input.tagName.toLowerCase(),
+            tag: input.tagName?.toLowerCase() || '',
             type: (input as HTMLInputElement).type || 'text',
             name: (input as HTMLInputElement).name || '',
             placeholder: (input as HTMLInputElement).placeholder || '',
@@ -316,7 +316,7 @@ export class PageScraper {
         const items = Array.from(list.querySelectorAll('li')).map(li => li.textContent?.trim() || '');
         
         lists.push({
-          tag: list.tagName.toLowerCase(),
+          tag: list.tagName?.toLowerCase() || '',
           items: items.filter(item => item.length > 0),
           itemCount: items.length,
           index
@@ -338,7 +338,7 @@ export class PageScraper {
         
         if (text.length > 20) { // Only include sections with meaningful content
           sections.push({
-            tag: section.tagName.toLowerCase(),
+            tag: section.tagName?.toLowerCase() || '',
             class: section.className,
             id: section.id,
             textPreview: text,
@@ -405,7 +405,6 @@ export class PageScraper {
   private isTrackingElement(element: Element): boolean {
     const id = element.id?.toLowerCase() || '';
     const className = element.className?.toLowerCase() || '';
-    const tagName = element.tagName?.toLowerCase() || '';
     
     // Check for tracking-related IDs and classes
     const trackingPatterns = [
@@ -493,7 +492,7 @@ export class PageScraper {
         'nav', 'menu', 'form', 'input', 'submit', 'link'
       ];
       
-      return meaningfulPatterns.some(pattern => cls.toLowerCase().includes(pattern));
+      return meaningfulPatterns.some(pattern => cls && typeof cls === 'string' && cls.toLowerCase().includes(pattern));
     });
     
     return classes.join(' ');
