@@ -142,7 +142,7 @@ export class StorageManager {
   static async clearCache(): Promise<void> {
     const items = await chrome.storage.local.get();
     const keysToRemove = Object.keys(items).filter(key => 
-      key.startsWith(this.CACHE_PREFIX)
+      key.startsWith('job:') || key.startsWith('jobStatus:')
     );
     
     if (keysToRemove.length > 0) {
@@ -153,7 +153,7 @@ export class StorageManager {
   static async getCacheSize(): Promise<number> {
     const items = await chrome.storage.local.get();
     return Object.keys(items).filter(key => 
-      key.startsWith(this.CACHE_PREFIX)
+      key.startsWith('job:') || key.startsWith('jobStatus:')
     ).length;
   }
 
@@ -181,4 +181,37 @@ export class StorageManager {
       await chrome.storage.local.remove(keysToRemove);
     }
   }
+}
+
+/**
+ * Post-process customer journey steps to remove duplicate numbering
+ * Removes leading numbered patterns like "1.", "1)", "1-", "1 ", etc.
+ * 
+ * Examples of what gets cleaned:
+ * - "1. Visitor arrives at landing page" → "Visitor arrives at landing page"
+ * - "2) User scrolls down" → "User scrolls down" 
+ * - "3- User clicks CTA" → "User clicks CTA"
+ * - "Step 4: User fills form" → "User fills form"
+ * - "5 User converts" → "User converts"
+ */
+export function cleanCustomerJourneySteps(steps: string[]): string[] {
+  if (!steps || !Array.isArray(steps)) {
+    return steps;
+  }
+
+  return steps.map(step => {
+    if (typeof step !== 'string') {
+      return step;
+    }
+
+    // Remove leading numbered patterns: "1.", "1)", "1-", "1 ", "Step 1:", etc.
+    // This regex matches:
+    // - Optional "Step" followed by space
+    // - One or more digits
+    // - Optional dot, parenthesis, dash, colon, or space
+    // - Optional space after the delimiter
+    const cleanedStep = step.replace(/^(?:Step\s+)?\d+[\.\)\-\:\s]*\s*/i, '').trim();
+    
+    return cleanedStep || step; // Fallback to original if cleaning results in empty string
+  });
 }

@@ -1,4 +1,4 @@
-import { StorageManager } from '../utils/storage';
+import { StorageManager, cleanCustomerJourneySteps } from '../utils/storage';
 import { generatePDF } from '../utils/pdf';
 import { AnalysisState, LLMAnalysis, RawPageData } from '../types';
 import { computeStableKey } from '../shared/keys';
@@ -804,8 +804,11 @@ class PopupController {
       return;
     }
 
+    // Clean duplicate numbering from customer journey steps
+    const cleanedSteps = cleanCustomerJourneySteps(journeySteps);
+
     container.innerHTML = '';
-    journeySteps.forEach(step => {
+    cleanedSteps.forEach(step => {
       const listItem = document.createElement('li');
       listItem.textContent = step;
       container.appendChild(listItem);

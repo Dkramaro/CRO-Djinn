@@ -253,9 +253,9 @@ export class JobManager {
       const status = result[statusKey];
       
       if (status) {
-        // Check if status is still valid (within 30 minutes)
+        // Check if status is still valid (within 2 days)
         const age = Date.now() - (status.completedAt || 0);
-        const maxAge = 30 * 60 * 1000; // 30 minutes
+        const maxAge = 2 * 24 * 60 * 60 * 1000; // 2 days
         
         if (age < maxAge) {
           return {
@@ -306,7 +306,7 @@ export class JobManager {
   /**
    * Clean up old jobs to prevent memory leaks
    */
-  cleanup(maxAge: number = 30 * 60 * 1000): void { // 30 minutes default
+  cleanup(maxAge: number = 2 * 24 * 60 * 60 * 1000): void { // 2 days default
     const cutoff = Date.now() - maxAge;
     let cleaned = 0;
     

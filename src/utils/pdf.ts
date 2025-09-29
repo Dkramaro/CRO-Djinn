@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { LLMAnalysis, RawPageData } from '../types';
+import { cleanCustomerJourneySteps } from './storage';
 
 // Utility function to load PNG images as base64 data URLs
 async function loadImageAsBase64(imagePath: string): Promise<string> {
@@ -47,6 +48,9 @@ export class PDFExporter {
     threeStars: string;
   };
 
+  // Base64-encoded brand logo (PNG)
+  private brandLogo: string;
+
   constructor() {
     this.doc = new jsPDF('portrait', 'mm', 'a4');
     
@@ -68,7 +72,7 @@ export class PDFExporter {
       warning: [217, 119, 6],       // Elegant amber (#d97706)
       danger: [153, 27, 27],        // Sophisticated burgundy (#991b1b)
       info: [29, 78, 216],          // Premium sapphire blue (#1d4ed8)
-      text: [15, 23, 42],           // Deep charcoal for maximum readability (#0f172a)
+      text: [51, 51, 51],           // Dark grey for softer readability (#333333)
       lightGray: [248, 250, 252],   // Refined off-white (#f8fafc)
       background: [255, 255, 255],  // Pure white for clarity
       accent: [37, 99, 235],        // Refined royal blue (#2563eb)
@@ -81,15 +85,19 @@ export class PDFExporter {
       twoStars: '',
       threeStars: ''
     };
+
+    // Initialize brand logo as empty - will be loaded async
+    this.brandLogo = '';
   }
 
-  // Load PNG star images from the icons folder
+  // Load PNG star images and brand logo from the icons folder
   private async loadStarImages(): Promise<void> {
     try {
-      const [oneStar, twoStars, threeStars] = await Promise.all([
+      const [oneStar, twoStars, threeStars, brandLogo] = await Promise.all([
         loadImageAsBase64('icons/1 Star.png'),
         loadImageAsBase64('icons/2 star.png'),
-        loadImageAsBase64('icons/3 Star.png')
+        loadImageAsBase64('icons/3 Star.png'),
+        loadImageAsBase64('icons/CRO-Genie Logo.png')
       ]);
       
       this.starImages = {
@@ -97,8 +105,10 @@ export class PDFExporter {
         twoStars,
         threeStars
       };
+
+      this.brandLogo = brandLogo;
     } catch (error) {
-      console.error('Failed to load star images:', error);
+      console.error('Failed to load star images and brand logo:', error);
       // Keep empty strings as fallback
     }
   }
@@ -110,6 +120,10 @@ export class PDFExporter {
   ): Promise<void> {
     // Load star images before generating PDF
     await this.loadStarImages();
+    
+    // Add brand logo to first page
+    this.addBrandLogo();
+    
     // Professional header without any branding
     this.addProfessionalHeader();
     
@@ -264,6 +278,30 @@ export class PDFExporter {
     this.doc.text('Rating', x + 5, y + 12);
   }
 
+  private addBrandLogo(): void {
+    try {
+      if (this.brandLogo && this.brandLogo.length > 0) {
+        // Position logo in bottom right corner outside the margin
+        const logoWidth = 15; // Small but visible size (15mm)
+        const logoHeight = 15; // Square aspect ratio, adjust if needed
+        
+        // Position: right edge minus a small buffer, bottom of page minus bottom margin
+        const logoX = this.pageWidth - logoWidth - 5; // 5mm buffer from right edge
+        const logoY = this.pageHeight - logoHeight - 8; // 8mm buffer from bottom edge
+        
+        // Add logo to PDF
+        this.doc.addImage(this.brandLogo, 'PNG', logoX, logoY, logoWidth, logoHeight);
+        
+        console.log(`Brand logo added at position: ${logoX}, ${logoY} with size: ${logoWidth}x${logoHeight}`);
+      } else {
+        console.warn('Brand logo not available, skipping logo placement');
+      }
+    } catch (error) {
+      console.warn('Failed to add brand logo to PDF:', error);
+      // Fail silently - logo is not critical for PDF functionality
+    }
+  }
+
   private addPageOverviewSection(pageSummary: any): void {
     this.addSectionHeaderProfessional('Page Overview');
     
@@ -331,8 +369,11 @@ export class PDFExporter {
       this.doc.setFont('helvetica', 'normal');
       this.doc.setFontSize(10);
       
+      // Clean duplicate numbering from customer journey steps
+      const cleanedJourneySteps = cleanCustomerJourneySteps(pageSummary.currentUserJourney);
+      
       const maxWidth = this.pageWidth - (2 * this.margin) - 10; // Account for numbering
-      pageSummary.currentUserJourney.forEach((step: string, index: number) => {
+      cleanedJourneySteps.forEach((step: string, index: number) => {
         // Add step number
         this.doc.setTextColor(...this.colors.accent);
         this.doc.setFont('helvetica', 'bold');
@@ -380,6 +421,9 @@ export class PDFExporter {
   private addNewPage(): void {
     this.doc.addPage();
     this.yPosition = this.margin; // Reset position to top of new page
+    
+    // Add brand logo to every new page
+    this.addBrandLogo();
   }
 
   private addStrengthsWeaknessesSection(pageSummary: any): void {
@@ -409,57 +453,61 @@ export class PDFExporter {
       
       pageSummary.keyStrengths.forEach((strength: string, index: number) => {
         // Calculate text width for content
-        const safeTextWidth = this.pageWidth - (2 * this.margin) - 20;
+        const safeTextWidth = this.pageWidth - (2 * this.margin) - 8; // Use generous width like Priority Recommendations
         
-        // Store starting position for dynamic height calculation
+        // Store starting position for render-measure-redraw pattern
         const cardStartY = this.yPosition;
         
-        // First, calculate the height by simulating content placement
-        let calculatedHeight = 3; // Top padding
-        
-        // Calculate text height for the strength item
-        const cleanStrength = this.sanitizeTextForPDF(strength);
-        const wrappedStrength = this.wrapText(cleanStrength, safeTextWidth - 10);
-        calculatedHeight += (wrappedStrength.length * 4) + 2;
-        
-        calculatedHeight += 1; // Bottom buffer
-        
-        // Draw container first with calculated height (refined green styling for strengths)
-        this.doc.setFillColor(240, 253, 244); // Elegant light green tint
-        this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'F');
-        
-        this.doc.setDrawColor(22, 163, 74); // Refined forest green border
-        this.doc.setLineWidth(0.3);
-        this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'S');
-        
-        // Professional emerald vertical accent bar on the left (for strengths)
-        this.doc.setFillColor(...this.colors.success); // Professional emerald green
-        this.doc.roundedRect(this.margin - 2, this.yPosition - 1, 4, calculatedHeight, 0, 0, 'F');
-        
-        // Now add text content on top of the container
-        // Strength text (the actual content)
-        this.doc.setTextColor(0, 0, 0); // Black text for visibility
+        // STEP 1: Render content and track actual position
+        // Set consistent font properties before measurement
         this.doc.setFont('helvetica', 'normal');
         this.doc.setFontSize(10);
+        this.doc.setCharSpace(0); // Prevent character spacing issues
+        
         const strengthCleanText = this.sanitizeTextForPDF(strength);
         const strengthWrappedText = this.wrapText(strengthCleanText, safeTextWidth - 10);
         
-        let textY = this.yPosition + 5; // Better vertical alignment - more space from card top
+        this.yPosition += 5; // Top padding
+        let textY = this.yPosition;
+        
+        // Render content to measure exact height needed
+        strengthWrappedText.forEach((line, lineIndex) => {
+          textY += 4; // Line height (matching the 4.5 but consistent with measurement)
+        });
+        
+        const contentEndY = textY + 1; // Bottom buffer
+        const exactHeight = contentEndY - cardStartY;
+        
+        // STEP 2: Draw container with exact measured height
+        this.doc.setFillColor(240, 253, 244); // Elegant light green tint
+        this.doc.roundedRect(this.margin - 2, cardStartY - 1, this.pageWidth - (2 * this.margin) + 4, exactHeight, 3, 3, 'F');
+        
+        this.doc.setDrawColor(22, 163, 74); // Refined forest green border
+        this.doc.setLineWidth(0.3);
+        this.doc.roundedRect(this.margin - 2, cardStartY - 1, this.pageWidth - (2 * this.margin) + 4, exactHeight, 3, 3, 'S');
+        
+        // Professional emerald vertical accent bar on the left (for strengths)
+        this.doc.setFillColor(...this.colors.success); // Professional emerald green
+        this.doc.roundedRect(this.margin - 2, cardStartY - 1, 4, exactHeight, 0, 0, 'F');
+        
+        // STEP 3: Re-render content with identical font metrics
+        this.doc.setTextColor(51, 51, 51); // Black text for visibility
+        this.doc.setFont('helvetica', 'normal');
+        this.doc.setFontSize(10);
+        this.doc.setCharSpace(0); // Ensure identical character spacing
+        
+        textY = cardStartY + 5; // Reset to actual starting position
         strengthWrappedText.forEach((line, lineIndex) => {
           const cleanLine = this.sanitizeTextForPDF(line);
-          this.doc.setCharSpace(0);
-          this.doc.setFont('helvetica', 'normal');
-          this.doc.setFontSize(10);
-          this.doc.setTextColor(0, 0, 0); // Ensure black text
           
           // Preserve important characters by using a more selective approach
           const safeLine = cleanLine.replace(/[^\x20-\x7E]/g, ''); // Only remove non-printable characters
           this.doc.text(safeLine, this.margin + 8, textY); // Better horizontal alignment - more space from vertical bar
-          textY += 4.5; // Slightly more line spacing for better readability
+          textY += 4; // Consistent line spacing matching measurement
         });
         
-        // Move to next card position
-        this.yPosition = cardStartY + calculatedHeight + 5; // Spacing between cards
+        // Move to next card position using exact measured height
+        this.yPosition = cardStartY + exactHeight + 5; // Spacing between cards
       });
     }
     
@@ -485,57 +533,61 @@ export class PDFExporter {
       
       pageSummary.criticalWeaknesses.forEach((weakness: string, index: number) => {
         // Calculate text width for content
-        const safeTextWidth = this.pageWidth - (2 * this.margin) - 20;
+        const safeTextWidth = this.pageWidth - (2 * this.margin) - 8; // Use generous width like Priority Recommendations
         
-        // Store starting position for dynamic height calculation
+        // Store starting position for render-measure-redraw pattern
         const cardStartY = this.yPosition;
         
-        // First, calculate the height by simulating content placement
-        let calculatedHeight = 3; // Top padding
-        
-        // Calculate text height for the weakness item
-        const cleanWeakness = this.sanitizeTextForPDF(weakness);
-        const wrappedWeakness = this.wrapText(cleanWeakness, safeTextWidth - 10);
-        calculatedHeight += (wrappedWeakness.length * 4) + 2;
-        
-        calculatedHeight += 1; // Bottom buffer
-        
-        // Draw container first with calculated height (sophisticated burgundy styling for issues)
-        this.doc.setFillColor(254, 242, 242); // Elegant light burgundy tint
-        this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'F');
-        
-        this.doc.setDrawColor(220, 38, 38); // Refined burgundy border
-        this.doc.setLineWidth(0.3);
-        this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'S');
-        
-        // Professional red vertical accent bar on the left (for issues)
-        this.doc.setFillColor(...this.colors.danger); // Professional red
-        this.doc.roundedRect(this.margin - 2, this.yPosition - 1, 4, calculatedHeight, 0, 0, 'F');
-        
-        // Now add text content on top of the container
-        // Weakness text (the actual content)
-        this.doc.setTextColor(0, 0, 0); // Black text for visibility
+        // STEP 1: Render content and track actual position
+        // Set consistent font properties before measurement
         this.doc.setFont('helvetica', 'normal');
         this.doc.setFontSize(10);
+        this.doc.setCharSpace(0); // Prevent character spacing issues
+        
         const weaknessCleanText = this.sanitizeTextForPDF(weakness);
         const weaknessWrappedText = this.wrapText(weaknessCleanText, safeTextWidth - 10);
         
-        let textY = this.yPosition + 5; // Better vertical alignment - more space from card top
+        this.yPosition += 5; // Top padding
+        let textY = this.yPosition;
+        
+        // Render content to measure exact height needed
+        weaknessWrappedText.forEach((line, lineIndex) => {
+          textY += 4; // Line height (consistent with measurement)
+        });
+        
+        const contentEndY = textY + 1; // Bottom buffer
+        const exactHeight = contentEndY - cardStartY;
+        
+        // STEP 2: Draw container with exact measured height
+        this.doc.setFillColor(254, 242, 242); // Elegant light burgundy tint
+        this.doc.roundedRect(this.margin - 2, cardStartY - 1, this.pageWidth - (2 * this.margin) + 4, exactHeight, 3, 3, 'F');
+        
+        this.doc.setDrawColor(220, 38, 38); // Refined burgundy border
+        this.doc.setLineWidth(0.3);
+        this.doc.roundedRect(this.margin - 2, cardStartY - 1, this.pageWidth - (2 * this.margin) + 4, exactHeight, 3, 3, 'S');
+        
+        // Professional red vertical accent bar on the left (for issues)
+        this.doc.setFillColor(...this.colors.danger); // Professional red
+        this.doc.roundedRect(this.margin - 2, cardStartY - 1, 4, exactHeight, 0, 0, 'F');
+        
+        // STEP 3: Re-render content with identical font metrics
+        this.doc.setTextColor(51, 51, 51); // Black text for visibility
+        this.doc.setFont('helvetica', 'normal');
+        this.doc.setFontSize(10);
+        this.doc.setCharSpace(0); // Ensure identical character spacing
+        
+        textY = cardStartY + 5; // Reset to actual starting position
         weaknessWrappedText.forEach((line, lineIndex) => {
           const cleanLine = this.sanitizeTextForPDF(line);
-          this.doc.setCharSpace(0);
-          this.doc.setFont('helvetica', 'normal');
-          this.doc.setFontSize(10);
-          this.doc.setTextColor(0, 0, 0); // Ensure black text
           
           // Preserve important characters by using a more selective approach
           const safeLine = cleanLine.replace(/[^\x20-\x7E]/g, ''); // Only remove non-printable characters
           this.doc.text(safeLine, this.margin + 8, textY); // Better horizontal alignment - more space from vertical bar
-          textY += 4.5; // Slightly more line spacing for better readability
+          textY += 4; // Consistent line spacing matching measurement
         });
         
-        // Move to next card position
-        this.yPosition = cardStartY + calculatedHeight + 5; // Spacing between cards
+        // Move to next card position using exact measured height
+        this.yPosition = cardStartY + exactHeight + 5; // Spacing between cards
       });
     }
     
@@ -550,46 +602,74 @@ export class PDFExporter {
     this.yPosition += 2;
     this.addSectionHeaderProfessional('Executive Summary');
     
+    // Add proper spacing between header and first card
+    this.yPosition += 8;
+    
     summary.forEach((item, index) => {
-      // Calculate text width for content
-      const safeTextWidth = this.pageWidth - (2 * this.margin) - 20;
+      // Calculate text width for content using same generous width as other sections
+      const safeTextWidth = this.pageWidth - (2 * this.margin) - 8;
       
       // Store starting position for dynamic height calculation
       const cardStartY = this.yPosition;
       
-      // First, calculate the height by simulating content placement
-      let calculatedHeight = 0; // Start with no padding
+      // FONT METRICS FIX: Define exact font constants for consistent measurements
+      const CONTENT_FONT_SIZE = 10;
+      const CONTENT_LINE_HEIGHT = 4.2;
       
-      // Calculate text height for the summary item
+      // STEP 1: ACTUAL CONTENT RENDERING (render-measure-redraw pattern)
+      // Render content first to measure exact height
       const cleanItem = this.sanitizeTextForPDF(item);
+      
+      // Set consistent font for accurate measurement
+      this.doc.setFont('helvetica', 'normal');
+      this.doc.setFontSize(CONTENT_FONT_SIZE);
+      this.doc.setCharSpace(0);
       const wrappedItem = this.wrapText(cleanItem, safeTextWidth - 10);
       
-      // Match the actual text rendering: starts at +3, uses 4.2pt line spacing
-      calculatedHeight += 3; // Text starts 3pt from card top
-      calculatedHeight += (wrappedItem.length * 4.2); // 4.2pt line spacing
-      calculatedHeight += 3; // Bottom padding to match top padding
+      // Track position during content rendering
+      let textY = this.yPosition + 6; // Increased spacing between card outline and first line of text
+      wrappedItem.forEach((line, lineIndex) => {
+        const cleanLine = this.sanitizeTextForPDF(line);
+        
+        // Process label/content splitting
+        const safeLine = cleanLine.replace(/[^\x20-\x7E]/g, '');
+        const labelMatch = safeLine.match(/^([^:]+:)\s*(.*)$/);
+        
+        if (labelMatch) {
+          // Label and content on same line
+          textY += CONTENT_LINE_HEIGHT;
+        } else {
+          // Regular line
+          textY += CONTENT_LINE_HEIGHT;
+        }
+      });
       
-      // Draw container first with calculated height (matching Copy Suggestions)
+      // STEP 2: Calculate EXACT height from ACTUAL content positioning
+      const contentEndY = textY;
+      const exactHeight = contentEndY - cardStartY + 3; // Add bottom padding
+      
+      // STEP 3: Draw container with EXACT measured height
       this.doc.setFillColor(255, 255, 255);
-      this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'F');
+      this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, exactHeight, 3, 3, 'F');
       
       this.doc.setDrawColor(220, 220, 220);
       this.doc.setLineWidth(0.3);
-      this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, calculatedHeight, 3, 3, 'S');
+      this.doc.roundedRect(this.margin - 2, this.yPosition - 1, this.pageWidth - (2 * this.margin) + 4, exactHeight, 3, 3, 'S');
       
       // Charcoal vertical accent bar on the left (matching Copy Suggestions)
       this.doc.setFillColor(...this.colors.primary);
-      this.doc.roundedRect(this.margin - 2, this.yPosition - 1, 4, calculatedHeight, 0, 0, 'F');
+      this.doc.roundedRect(this.margin - 2, this.yPosition - 1, 4, exactHeight, 0, 0, 'F');
       
-      // Now add text content on top of the container
-      // Summary text (the actual content)
-      this.doc.setTextColor(0, 0, 0); // Black text for visibility
+      // STEP 4: Re-render content with EXACT same font metrics
+      this.doc.setTextColor(51, 51, 51); // Black text for visibility
       this.doc.setFont('helvetica', 'normal');
-      this.doc.setFontSize(10);
+      this.doc.setFontSize(CONTENT_FONT_SIZE);
+      this.doc.setCharSpace(0);
+      
       const summaryCleanItem = this.sanitizeTextForPDF(item);
       const summaryWrappedItem = this.wrapText(summaryCleanItem, safeTextWidth - 10);
       
-      let textY = this.yPosition + 3; // Start text below the card top
+      textY = this.yPosition + 6; // Increased spacing between card outline and first line of text
       summaryWrappedItem.forEach((line, lineIndex) => {
         const cleanLine = this.sanitizeTextForPDF(line);
         this.doc.setCharSpace(0);
@@ -607,7 +687,8 @@ export class PDFExporter {
           
           // Draw label in vibrant blue
           this.doc.setFont('helvetica', 'bold');
-          this.doc.setFontSize(10);
+          this.doc.setFontSize(CONTENT_FONT_SIZE);
+          this.doc.setCharSpace(0);
           this.doc.setTextColor(...this.colors.accent); // Vibrant blue color
           this.doc.text(label, this.margin + 6, textY);
           
@@ -616,23 +697,25 @@ export class PDFExporter {
             // Calculate the width of the label to position content correctly
             const labelWidth = this.doc.getTextWidth(label);
             this.doc.setFont('helvetica', 'normal');
-            this.doc.setFontSize(10);
-            this.doc.setTextColor(0, 0, 0); // Black color
+            this.doc.setFontSize(CONTENT_FONT_SIZE);
+            this.doc.setCharSpace(0);
+            this.doc.setTextColor(51, 51, 51); // Black color
             this.doc.text(content, this.margin + 6 + labelWidth, textY);
           }
         } else {
           // Regular line without label - draw in black
           this.doc.setFont('helvetica', 'normal');
-          this.doc.setFontSize(10);
-          this.doc.setTextColor(0, 0, 0); // Black color
+          this.doc.setFontSize(CONTENT_FONT_SIZE);
+          this.doc.setCharSpace(0);
+          this.doc.setTextColor(51, 51, 51); // Black color
           this.doc.text(safeLine, this.margin + 6, textY);
         }
         
-        textY += 4.2; // Slightly better line spacing for improved readability
+        textY += CONTENT_LINE_HEIGHT; // Consistent line spacing
       });
       
-      // Move to next card position
-      this.yPosition = cardStartY + calculatedHeight + 5; // Spacing between cards
+      // Move to next card position using exact measured height
+      this.yPosition = cardStartY + exactHeight + 5; // Spacing between cards
     });
     
     this.yPosition += 5;
@@ -817,7 +900,7 @@ export class PDFExporter {
       textY += 8;
       
       // Ensure consistent font settings for issue text
-      this.doc.setTextColor(0, 0, 0);
+      this.doc.setTextColor(51, 51, 51);
       this.doc.setFont('helvetica', 'normal');
       this.doc.setFontSize(10);
       this.doc.setCharSpace(0);
@@ -839,7 +922,7 @@ export class PDFExporter {
       textY += 8;
       
       // Ensure consistent font settings for solution text
-      this.doc.setTextColor(0, 0, 0);
+      this.doc.setTextColor(51, 51, 51);
       this.doc.setFont('helvetica', 'normal');
       this.doc.setFontSize(10);
       this.doc.setCharSpace(0);
@@ -861,7 +944,7 @@ export class PDFExporter {
         this.doc.text('HOW TO IMPLEMENT:', this.margin + 6, textY);
         textY += 8;
         
-        this.doc.setTextColor(0, 0, 0);
+        this.doc.setTextColor(51, 51, 51);
         this.doc.setFont('helvetica', 'normal');
         
         const implementationData = rec.implementation || rec.implementationDetails || rec.how;
@@ -876,7 +959,7 @@ export class PDFExporter {
             this.doc.text('-', this.margin + 8, textY);
             
             // Step text - ensure consistent font settings before wrapping
-            this.doc.setTextColor(0, 0, 0);
+            this.doc.setTextColor(51, 51, 51);
             this.doc.setFont('helvetica', 'normal');
             this.doc.setFontSize(10);
             this.doc.setCharSpace(0);
@@ -915,7 +998,7 @@ export class PDFExporter {
         textY += 8;
         
         // Ensure consistent font settings for psychology text
-        this.doc.setTextColor(0, 0, 0);
+        this.doc.setTextColor(51, 51, 51);
         this.doc.setFont('helvetica', 'normal');
         this.doc.setFontSize(10);
         this.doc.setCharSpace(0);
@@ -1005,7 +1088,7 @@ export class PDFExporter {
       
       // Suggestion text (the actual copy content)
       if (suggestion.suggestion) {
-        this.doc.setTextColor(0, 0, 0); // Black text for visibility
+        this.doc.setTextColor(51, 51, 51); // Black text for visibility
         this.doc.setFont('helvetica', 'normal');
         this.doc.setFontSize(10);
         const cleanSuggestion = this.sanitizeTextForPDF(suggestion.suggestion);
@@ -1015,7 +1098,7 @@ export class PDFExporter {
           this.doc.setCharSpace(0);
           this.doc.setFont('helvetica', 'normal');
           this.doc.setFontSize(10);
-          this.doc.setTextColor(0, 0, 0); // Ensure black text
+          this.doc.setTextColor(51, 51, 51); // Ensure black text
           
           // Preserve important characters like $, +, commas, etc. by using a more selective approach
           const safeLine = cleanLine.replace(/[^\x20-\x7E]/g, ''); // Only remove non-printable characters
@@ -1036,51 +1119,73 @@ export class PDFExporter {
     // Start a new page for Quick Wins
     this.addNewPage();
     
-    // Modern header with gradient-like effect
-    this.yPosition += 2;
+    // Header function now handles all spacing reductions
     this.addSectionHeaderProfessional('Quick Wins');
     
+    // Add proper spacing between header and first card
+    this.yPosition += 6;
+    
     quickWins.forEach((win, index) => {
-      // Calculate text width for content
-      const safeTextWidth = this.pageWidth - (2 * this.margin) - 20;
+      // FONT METRICS FIX: Define exact font constants for consistent measurements
+      const TITLE_FONT_SIZE = 11;
+      const TITLE_LINE_HEIGHT = 5;
+      const LABEL_FONT_SIZE = 10;
+      const LABEL_LINE_HEIGHT = 4;
+      const CONTENT_FONT_SIZE = 10;
+      const CONTENT_LINE_HEIGHT = 4;
+      const METADATA_FONT_SIZE = 7;
+      
+      // Calculate text width for content - use wider width like other sections
+      const safeTextWidth = this.pageWidth - (2 * this.margin) - 8;
       
       // Store starting position for dynamic height calculation
       const cardStartY = this.yPosition;
       
       // First, calculate the height by simulating content placement
       const tempY = this.yPosition;
-      let calculatedHeight = 3; // Top padding
+      let calculatedHeight = 6; // Top padding
       
-      // Calculate title height (effort/timeline now on same line, so no extra height needed)
+      // Calculate title height with consistent font settings
       const cleanTitle = this.sanitizeTextForPDF(win.title || '');
-      const wrappedTitle = this.wrapText(cleanTitle, safeTextWidth - 10);
-      calculatedHeight += (wrappedTitle.length * 5) + 2;
+      // Ensure proper spacing in title for height calculation
+      const processedTitle = cleanTitle.replace(/([a-z])([A-Z])/g, '$1 $2'); // Add space between camelCase
+      this.doc.setFont('helvetica', 'bold');
+      this.doc.setFontSize(TITLE_FONT_SIZE);
+      this.doc.setCharSpace(0);
+      const wrappedTitle = this.wrapText(processedTitle, safeTextWidth - 10);
+      calculatedHeight += (wrappedTitle.length * TITLE_LINE_HEIGHT) + 4; // Title height + spacing
       
-      // Calculate description height (now with inline "What to do:" label)
+      // Calculate maximum label width for consistent content alignment
+      this.doc.setFont('helvetica', 'bold');
+      this.doc.setFontSize(LABEL_FONT_SIZE);
+      this.doc.setCharSpace(0);
+      const calcWhatToDoLabelWidth = this.doc.getTextWidth('What to do:');
+      const calcWhyLabelWidth = this.doc.getTextWidth('Why:');
+      const calcMaxLabelWidth = Math.max(calcWhatToDoLabelWidth, calcWhyLabelWidth);
+      const calculationContentWidth = safeTextWidth - calcMaxLabelWidth - 8;
+      
+      // Calculate description height with consistent font settings
       if (win.description) {
         const cleanDescription = this.sanitizeTextForPDF(win.description);
-        // Set font to get accurate label width
-        this.doc.setFont('helvetica', 'bold');
-        this.doc.setFontSize(10);
-        const labelWidth = this.doc.getTextWidth('What to do:');
-        const contentWidth = safeTextWidth - labelWidth - 5;
-        const descriptionLines = this.wrapText(cleanDescription, contentWidth);
-        calculatedHeight += (descriptionLines.length * 4) + 1; // Reduced spacing to match rendering
+        this.doc.setFont('helvetica', 'normal');
+        this.doc.setFontSize(CONTENT_FONT_SIZE);
+        this.doc.setCharSpace(0);
+        const descriptionLines = this.wrapText(cleanDescription, calculationContentWidth);
+        calculatedHeight += (descriptionLines.length * CONTENT_LINE_HEIGHT) + 4; // Content height + section spacing
       }
       
-      // Calculate rationale height (now with inline "Why:" label)
+      // Calculate rationale height with consistent font settings
       if (win.rationale) {
         const cleanRationale = this.sanitizeTextForPDF(win.rationale);
-        // Set font to get accurate label width
-        this.doc.setFont('helvetica', 'bold');
-        this.doc.setFontSize(10);
-        const labelWidth = this.doc.getTextWidth('Why:');
-        const contentWidth = safeTextWidth - labelWidth - 5;
-        const rationaleLines = this.wrapText(cleanRationale, contentWidth);
-        calculatedHeight += (rationaleLines.length * 4) + 2;
+        this.doc.setFont('helvetica', 'normal');
+        this.doc.setFontSize(CONTENT_FONT_SIZE);
+        this.doc.setCharSpace(0);
+        const rationaleLines = this.wrapText(cleanRationale, calculationContentWidth);
+        calculatedHeight += (rationaleLines.length * CONTENT_LINE_HEIGHT) + 2; // Content height + bottom spacing
       }
       
-      calculatedHeight += 1; // Bottom buffer
+      // Add extra top padding to account for metadata at top right within card
+      calculatedHeight += 2; // Extra space for internal metadata
       
       // Draw container first with calculated height
       this.doc.setFillColor(255, 255, 255);
@@ -1095,30 +1200,36 @@ export class PDFExporter {
       this.doc.roundedRect(this.margin - 2, this.yPosition - 1, 4, calculatedHeight, 0, 0, 'F');
       
       // Now add text content on top of the container
-      // Title and effort/timeline on the same line (matching popup layout)
+      // Title rendering with consistent font settings
       this.doc.setTextColor(...this.colors.accent); // Blue accent text for theme
       this.doc.setFont('helvetica', 'bold');
-      this.doc.setFontSize(11);
+      this.doc.setFontSize(TITLE_FONT_SIZE);
+      this.doc.setCharSpace(0);
       
-      let titleY = this.yPosition + 3;
+      let titleY = this.yPosition + 6; // Top padding inside card
       
-      // Render title on the left side
+      // Render title lines with IDENTICAL font settings as measurement
       wrappedTitle.forEach((line) => {
         const cleanLine = this.sanitizeTextForPDF(line);
         this.doc.setCharSpace(0);
         this.doc.setFont('helvetica', 'bold');
-        this.doc.setFontSize(11);
-        this.doc.setTextColor(...this.colors.accent); // Ensure blue accent text
+        this.doc.setFontSize(TITLE_FONT_SIZE);
+        this.doc.setTextColor(...this.colors.accent);
         
-        const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%[0-9A-F]{2}/g, '');
+        // Use the same processed line as in height calculation
+        // Preserve forward slashes and other important punctuation
+        const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%2F/g, '/').replace(/%[0-9A-F]{2}/g, '');
         this.doc.text(encodedLine || cleanLine, this.margin + 6, titleY);
-        titleY += 5;
+        titleY += TITLE_LINE_HEIGHT;
       });
       
-      // Add effort/timeline on the same line as the first title line  
+      this.yPosition = titleY + 4; // Spacing between title and content
+      
+      // Add effort/timeline metadata at top right WITHIN the card
       this.doc.setTextColor(...this.colors.muted); // Elegant muted slate for subtle metadata
       this.doc.setFont('helvetica', 'normal');
-      this.doc.setFontSize(7); // Smaller font size
+      this.doc.setFontSize(6); // Smaller font size
+      this.doc.setCharSpace(0);
       
       const effortLabel = this.getEffortLabel(win.effort);
       let metadataText = `Effort: ${effortLabel}`;
@@ -1126,78 +1237,88 @@ export class PDFExporter {
         metadataText += ` • Timeline: ${win.timeline}`;
       }
       
-      // Position metadata on the same line as the title (right side)
-      const metadataX = this.pageWidth - this.margin - 2;
-      this.doc.text(metadataText, metadataX, this.yPosition + 3, { align: 'right' });
+      // Position metadata at top right corner WITHIN the card boundaries
+      const metadataX = this.pageWidth - this.margin - 6; // Inside card margin
+      const metadataY = cardStartY + 6; // Top of card with padding
+      this.doc.text(metadataText, metadataX, metadataY, { align: 'right' });
       
-      this.yPosition = titleY + 2;
+      // Define consistent label positioning with IDENTICAL font settings as calculation
+      const labelStartX = this.margin + 6;
       
-      // What to do section with inline label
+      // Calculate maximum label width for consistent content alignment - IDENTICAL to calculation
+      this.doc.setFont('helvetica', 'bold');
+      this.doc.setFontSize(LABEL_FONT_SIZE);
+      this.doc.setCharSpace(0);
+      const whatToDoLabelWidth = this.doc.getTextWidth('What to do:');
+      const whyLabelWidth = this.doc.getTextWidth('Why:');
+      const maxLabelWidth = Math.max(whatToDoLabelWidth, whyLabelWidth);
+      const contentStartX = labelStartX + maxLabelWidth + 2;
+      const contentWidth = safeTextWidth - maxLabelWidth - 8;
+      
+      // What to do section with inline label using consistent font settings
       if (win.description) {
-        this.doc.setTextColor(...this.colors.accent); // Blue accent text for "What to do:" label
+        this.doc.setTextColor(51, 51, 51); // Black text for "What to do:" label to match description text
         this.doc.setFont('helvetica', 'bold');
-        this.doc.setFontSize(10);
-        this.doc.text('What to do:', this.margin + 6, this.yPosition);
+        this.doc.setFontSize(LABEL_FONT_SIZE);
+        this.doc.setCharSpace(0);
+        this.doc.text('What to do:', labelStartX, this.yPosition);
         
-        // Add description content on the same line
-        this.doc.setTextColor(0, 0, 0); // Black text for content
+        // Add description content with IDENTICAL font settings as measurement
+        this.doc.setTextColor(51, 51, 51); // Black text for content
         this.doc.setFont('helvetica', 'normal');
-        this.doc.setFontSize(10);
+        this.doc.setFontSize(CONTENT_FONT_SIZE);
+        this.doc.setCharSpace(0);
         const cleanDescription = this.sanitizeTextForPDF(win.description);
         
-        // Calculate width available for content after "What to do:" label
-        this.doc.setFont('helvetica', 'bold');
-        this.doc.setFontSize(10);
-        const labelWidth = this.doc.getTextWidth('What to do:');
-        const contentWidth = safeTextWidth - labelWidth - 5; // 5pt spacing between label and content
+        // Use consistent content width and positioning - IDENTICAL to calculation
         const descriptionLines = this.wrapText(cleanDescription, contentWidth);
         
         descriptionLines.forEach((line, lineIndex) => {
           const cleanLine = this.sanitizeTextForPDF(line);
           this.doc.setCharSpace(0);
           this.doc.setFont('helvetica', 'normal');
-          this.doc.setFontSize(10);
-          this.doc.setTextColor(0, 0, 0); // Ensure black text
+          this.doc.setFontSize(CONTENT_FONT_SIZE);
+          this.doc.setTextColor(51, 51, 51); // Ensure black text
           
-          const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%[0-9A-F]{2}/g, '');
-          const xPosition = lineIndex === 0 ? this.margin + 6 + labelWidth + 5 : this.margin + 6; // First line after label, subsequent lines aligned with label
-          this.doc.text(encodedLine || cleanLine, xPosition, this.yPosition);
-          this.yPosition += 4;
+          // Preserve forward slashes and other important punctuation
+          const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%2F/g, '/').replace(/%[0-9A-F]{2}/g, '');
+          // All lines align with content position, not label
+          this.doc.text(encodedLine || cleanLine, contentStartX, this.yPosition);
+          this.yPosition += CONTENT_LINE_HEIGHT;
         });
-        this.yPosition += 1; // Reduced spacing between What to do and Why sections
+        this.yPosition += 4; // Spacing between What to do and Why sections
       }
       
-      // Why section with inline label
+      // Why section with inline label using consistent font settings
       if (win.rationale) {
-        this.doc.setTextColor(...this.colors.accent); // Blue accent text for "Why:" label
+        this.doc.setTextColor(51, 51, 51); // Black text for "Why:" label to match description text
         this.doc.setFont('helvetica', 'bold');
-        this.doc.setFontSize(10);
-        this.doc.text('Why:', this.margin + 6, this.yPosition);
+        this.doc.setFontSize(LABEL_FONT_SIZE);
+        this.doc.setCharSpace(0);
+        this.doc.text('Why:', labelStartX, this.yPosition);
         
-        // Add rationale content on the same line
-        this.doc.setTextColor(0, 0, 0); // Black text for content
+        // Add rationale content with IDENTICAL font settings as measurement
+        this.doc.setTextColor(51, 51, 51); // Black text for content
         this.doc.setFont('helvetica', 'normal');
-        this.doc.setFontSize(10);
+        this.doc.setFontSize(CONTENT_FONT_SIZE);
+        this.doc.setCharSpace(0);
         const cleanRationale = this.sanitizeTextForPDF(win.rationale);
         
-        // Calculate width available for content after "Why:" label
-        this.doc.setFont('helvetica', 'bold');
-        this.doc.setFontSize(10);
-        const labelWidth = this.doc.getTextWidth('Why:');
-        const contentWidth = safeTextWidth - labelWidth - 5; // 5pt spacing between label and content
+        // Use consistent content width and positioning - IDENTICAL to calculation
         const rationaleLines = this.wrapText(cleanRationale, contentWidth);
         
         rationaleLines.forEach((line, lineIndex) => {
           const cleanLine = this.sanitizeTextForPDF(line);
           this.doc.setCharSpace(0);
           this.doc.setFont('helvetica', 'normal');
-          this.doc.setFontSize(10);
-          this.doc.setTextColor(0, 0, 0); // Ensure black text for content
+          this.doc.setFontSize(CONTENT_FONT_SIZE);
+          this.doc.setTextColor(51, 51, 51); // Ensure black text for content
           
-          const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%[0-9A-F]{2}/g, '');
-          const xPosition = lineIndex === 0 ? this.margin + 6 + labelWidth + 5 : this.margin + 6; // First line after label, subsequent lines aligned with label
-          this.doc.text(encodedLine || cleanLine, xPosition, this.yPosition);
-          this.yPosition += 4;
+          // Preserve forward slashes and other important punctuation
+          const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%2F/g, '/').replace(/%[0-9A-F]{2}/g, '');
+          // All lines align with content position, not label
+          this.doc.text(encodedLine || cleanLine, contentStartX, this.yPosition);
+          this.yPosition += CONTENT_LINE_HEIGHT;
         });
         this.yPosition += 2;
       }
@@ -1239,12 +1360,9 @@ export class PDFExporter {
 
   private addModernVisualAnalysisCard(title: string, data: any, index: number): void {
     // Calculate text width for content
-    const safeTextWidth = this.pageWidth - (2 * this.margin) - 20;
+    const safeTextWidth = this.pageWidth - (2 * this.margin) - 8;
     
-    // Store starting position for dynamic height calculation
-    const cardStartY = this.yPosition;
-    
-    // Premium enterprise colors for visual analysis sections - sophisticated and harmonious
+    // Premium enterprise colors for visual analysis sections
     const sectionColors: Array<{ bg: [number, number, number]; border: [number, number, number]; accent: [number, number, number] }> = [
       { bg: [239, 246, 255], border: [59, 130, 246], accent: [29, 78, 216] },    // Premium sapphire blue for Visual Flow  
       { bg: [236, 253, 245], border: [34, 197, 94], accent: [21, 128, 61] },     // Refined forest green for Color & Contrast
@@ -1252,91 +1370,28 @@ export class PDFExporter {
     ];
     
     const colors = sectionColors[index % sectionColors.length];
+    const cardStartY = this.yPosition;
     
-    // First, calculate the height by simulating content placement
-    let calculatedHeight = 8; // Top padding for header
+    // Define allowed fields for each card type
+    const allowedFields: { [key: string]: string[] } = {
+      'visual flow analysis': ['eyeflowpath', 'eyeflow'],
+      'color & contrast evaluation': ['ctacontrast', 'readability', 'emotionalresponse'],
+      'critical visual issue': ['problem', 'solution', 'impact']
+    };
     
-    // Calculate title height
-    const cleanTitle = this.sanitizeTextForPDF(title);
-    const wrappedTitle = this.wrapText(cleanTitle, safeTextWidth - 20);
-    calculatedHeight += (wrappedTitle.length * 6) + 4;
+    const titleKey = title.toLowerCase();
+    const allowedForCard = allowedFields[titleKey] || [];
     
-    // Calculate content height
-    Object.entries(data).forEach(([key, value]) => {
-      if (value && typeof value === 'string') {
-        // Skip Urgency field for Critical Visual Issue (redundant)
-        if (key.toLowerCase() === 'urgency' && title.toLowerCase().includes('critical')) {
-          return;
-        }
-        
-        const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-        const cleanValue = this.sanitizeTextForPDF(String(value));
-        
-        // Special height calculation for Visual Flow Analysis
-        if (key.toLowerCase() === 'eyeflowpath' || key.toLowerCase() === 'eyeflow') {
-          const flowItems = cleanValue.split(/\s+/).filter(item => item.length > 0);
-          const formattedFlow = flowItems.join(' -> ');
-          const valueLines = this.wrapText(formattedFlow, safeTextWidth - 20);
-          calculatedHeight += 4 + (valueLines.length * 4) + 3; // Restored normal spacing
-        } else {
-          const valueLines = this.wrapText(cleanValue, safeTextWidth - 20);
-          calculatedHeight += 4 + (valueLines.length * 4) + 3; // Restored normal spacing
-        }
-      }
-    });
-    
-    calculatedHeight += 8; // Bottom padding
-    
-    // Draw container with colored background
-    this.doc.setFillColor(...colors.bg);
-    this.doc.roundedRect(this.margin - 3, this.yPosition - 2, this.pageWidth - (2 * this.margin) + 6, calculatedHeight, 4, 4, 'F');
-    
-    // Colored border
-    this.doc.setDrawColor(...colors.border);
-    this.doc.setLineWidth(0.5);
-    this.doc.roundedRect(this.margin - 3, this.yPosition - 2, this.pageWidth - (2 * this.margin) + 6, calculatedHeight, 4, 4, 'S');
-    
-    // Colored header bar
-    this.doc.setFillColor(...colors.accent);
-    this.doc.roundedRect(this.margin - 3, this.yPosition - 2, this.pageWidth - (2 * this.margin) + 6, 8, 4, 4, 'F');
-    
-    // Now add text content on top of the container
-    // Section title in white on colored header
-    this.doc.setTextColor(255, 255, 255); // White text on colored header
-    this.doc.setFont('helvetica', 'bold');
-    this.doc.setFontSize(11);
-    
-    let titleY = this.yPosition + 2;
-    wrappedTitle.forEach((line) => {
-      const cleanLine = this.sanitizeTextForPDF(line);
-      this.doc.setCharSpace(0);
-      this.doc.setFont('helvetica', 'bold');
-      this.doc.setFontSize(11);
-      this.doc.setTextColor(255, 255, 255); // Ensure white text
-      
-      const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%[0-9A-F]{2}/g, '');
-      this.doc.text(encodedLine || cleanLine, this.margin, titleY);
-      titleY += 6;
-    });
-    
-    this.yPosition = cardStartY + 8 + (wrappedTitle.length * 6) + 3; // Reduced spacing between header and content
-    
-    // Process data fields with better styling and custom ordering for Critical Visual Issue
+    // Process data fields
     const entries = Object.entries(data);
-    
-    // Custom ordering for Critical Visual Issue: Problem, Solution, Impact
     let orderedEntries = entries;
     if (title.toLowerCase().includes('critical')) {
       const fieldOrder = ['problem', 'solution', 'impact'];
       orderedEntries = [];
-      
-      // Add fields in specified order
       fieldOrder.forEach(fieldName => {
         const found = entries.find(([key]) => key.toLowerCase() === fieldName);
         if (found) orderedEntries.push(found);
       });
-      
-      // Add any remaining fields not in the order
       entries.forEach(([key, value]) => {
         if (!fieldOrder.includes(key.toLowerCase()) && key.toLowerCase() !== 'urgency') {
           orderedEntries.push([key, value]);
@@ -1344,89 +1399,171 @@ export class PDFExporter {
       });
     }
     
-    orderedEntries.forEach(([key, value]) => {
-      if (value && typeof value === 'string') {
-        // Skip Urgency field for Critical Visual Issue (redundant)
-        if (key.toLowerCase() === 'urgency' && title.toLowerCase().includes('critical')) {
-          return;
-        }
-        
-        // Format key as label
-        const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-        const cleanLabel = this.sanitizeTextForPDF(label);
-        const cleanValue = this.sanitizeTextForPDF(String(value));
-        
-        // Special formatting for Visual Flow Analysis
-        if (key.toLowerCase() === 'eyeflowpath' || key.toLowerCase() === 'eyeflow') {
-          // Keep the original flow format with existing arrows, just clean it
-          const formattedFlow = cleanValue.replace(/\s*->\s*/g, ' -> '); // Normalize arrow spacing
-          
-          // Add label in accent color
-          this.doc.setTextColor(...colors.accent);
-          this.doc.setFont('helvetica', 'bold');
-          this.doc.setFontSize(10);
-          this.doc.text(`${cleanLabel}:`, this.margin, this.yPosition);
-          this.yPosition += 4; // Restored normal spacing
-          
-          // Add formatted flow in dark gray
-          this.doc.setTextColor(40, 40, 40);
-          this.doc.setFont('helvetica', 'normal');
-          this.doc.setFontSize(9);
-          const flowLines = this.wrapText(formattedFlow, safeTextWidth - 20);
-          flowLines.forEach((line) => {
-            const cleanLine = this.sanitizeTextForPDF(line);
-            this.doc.setCharSpace(0);
-            this.doc.setFont('helvetica', 'normal');
-            this.doc.setFontSize(9);
-            this.doc.setTextColor(40, 40, 40);
-            
-            // Use ASCII arrows that work in PDF
-            this.doc.text(cleanLine, this.margin + 2, this.yPosition);
-            this.yPosition += 4; // Restored normal line spacing
-          });
-          this.yPosition += 3; // Restored normal spacing after
-        } else {
-          // Regular formatting for other fields with normal spacing
-          // Add label in accent color
-          this.doc.setTextColor(...colors.accent);
-          this.doc.setFont('helvetica', 'bold');
-          this.doc.setFontSize(10);
-          this.doc.text(`${cleanLabel}:`, this.margin, this.yPosition);
-          this.yPosition += 4; // Normal spacing
-          
-          // Add value with wrapping in refined charcoal for premium readability
-          this.doc.setTextColor(...this.colors.text);
-          this.doc.setFont('helvetica', 'normal');
-          this.doc.setFontSize(9);
-          const valueLines = this.wrapText(cleanValue, safeTextWidth - 20);
-          valueLines.forEach((line) => {
-            const cleanLine = this.sanitizeTextForPDF(line);
-            this.doc.setCharSpace(0);
-            this.doc.setFont('helvetica', 'normal');
-            this.doc.setFontSize(9);
-            this.doc.setTextColor(...this.colors.text); // Premium deep charcoal for optimal readability
-            
-            const encodedLine = encodeURIComponent(cleanLine).replace(/%20/g, ' ').replace(/%[0-9A-F]{2}/g, '');
-            this.doc.text(encodedLine || cleanLine, this.margin + 2, this.yPosition);
-            this.yPosition += 4; // Restored normal line spacing
-          });
-          this.yPosition += 3; // Restored normal spacing after
-        }
-      }
+    // FONT METRICS FIX: Ensure consistent font settings for accurate measurements
+    const TITLE_FONT_SIZE = 11;
+    const TITLE_LINE_HEIGHT = 6;
+    const LABEL_FONT_SIZE = 10;
+    const LABEL_LINE_HEIGHT = 4;
+    const CONTENT_FONT_SIZE = 9;
+    const CONTENT_LINE_HEIGHT = 4;
+    const FIELD_SPACING = 1;
+    
+    // STEP 1: ACTUAL CONTENT RENDERING (not measurement - real rendering)
+    const cleanTitle = this.sanitizeTextForPDF(title);
+    
+    // Set consistent font for title measurement
+    this.doc.setFont('helvetica', 'bold');
+    this.doc.setFontSize(TITLE_FONT_SIZE);
+    this.doc.setCharSpace(0);
+    const wrappedTitle = this.wrapText(cleanTitle, safeTextWidth - 8);
+    
+    // Render title first
+    this.doc.setTextColor(255, 255, 255);
+    let titleY = cardStartY + 2;
+    wrappedTitle.forEach((line) => {
+      const cleanLine = this.sanitizeTextForPDF(line);
+      // We'll redraw this later, just tracking position now
+      titleY += TITLE_LINE_HEIGHT;
     });
     
-    // Move to next card position
-    this.yPosition = cardStartY + calculatedHeight + 8; // More spacing between cards
+    // Position for content start
+    this.yPosition = cardStartY + 8 + (wrappedTitle.length * TITLE_LINE_HEIGHT) + 3;
+    
+    // Render each field with consistent font metrics
+    orderedEntries.forEach(([key, value]) => {
+      const keyLower = key.toLowerCase();
+      
+      if (!allowedForCard.includes(keyLower)) return;
+      if (!value || typeof value !== 'string' || value.trim().length === 0) return;
+      
+      const cleanValue = this.sanitizeTextForPDF(String(value));
+      if (!cleanValue || cleanValue.trim().length === 0) return;
+      
+      const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+      const cleanLabel = this.sanitizeTextForPDF(label);
+      
+      // Render label (track position)
+      this.yPosition += LABEL_LINE_HEIGHT;
+      
+      // Render content with correct font metrics
+      if (keyLower === 'eyeflowpath' || keyLower === 'eyeflow') {
+        const formattedFlow = cleanValue.replace(/\s*->\s*/g, ' -> ');
+        
+        // Set font for accurate measurement
+        this.doc.setFont('helvetica', 'normal');
+        this.doc.setFontSize(CONTENT_FONT_SIZE);
+        this.doc.setCharSpace(0);
+        
+        const flowLines = this.wrapText(formattedFlow, safeTextWidth - 8);
+        this.yPosition += (flowLines.length * CONTENT_LINE_HEIGHT);
+      } else {
+        // Set font for accurate measurement
+        this.doc.setFont('helvetica', 'normal');
+        this.doc.setFontSize(CONTENT_FONT_SIZE);
+        this.doc.setCharSpace(0);
+        
+        const valueLines = this.wrapText(cleanValue, safeTextWidth - 8);
+        this.yPosition += (valueLines.length * CONTENT_LINE_HEIGHT);
+      }
+      
+      this.yPosition += FIELD_SPACING;
+    });
+    
+    // STEP 2: Calculate EXACT height from ACTUAL content positioning
+    const contentEndY = this.yPosition;
+    const exactHeight = contentEndY - cardStartY;
+    
+    // STEP 3: Draw container with EXACT height
+    this.doc.setFillColor(...colors.bg);
+    this.doc.roundedRect(this.margin - 3, cardStartY - 2, this.pageWidth - (2 * this.margin) + 6, exactHeight, 4, 4, 'F');
+    
+    this.doc.setDrawColor(...colors.border);
+    this.doc.setLineWidth(0.5);
+    this.doc.roundedRect(this.margin - 3, cardStartY - 2, this.pageWidth - (2 * this.margin) + 6, exactHeight, 4, 4, 'S');
+    
+    this.doc.setFillColor(...colors.accent);
+    this.doc.roundedRect(this.margin - 3, cardStartY - 2, this.pageWidth - (2 * this.margin) + 6, 8, 4, 4, 'F');
+    
+    // STEP 4: Now render content AGAIN with EXACT same font metrics
+    // Reset position to start
+    this.yPosition = cardStartY;
+    
+    // Title with exact same metrics
+    this.doc.setTextColor(255, 255, 255);
+    this.doc.setFont('helvetica', 'bold');
+    this.doc.setFontSize(TITLE_FONT_SIZE);
+    this.doc.setCharSpace(0);
+    
+    titleY = cardStartY + 2;
+    wrappedTitle.forEach((line) => {
+      const cleanLine = this.sanitizeTextForPDF(line);
+      this.doc.text(cleanLine, this.margin, titleY);
+      titleY += TITLE_LINE_HEIGHT;
+    });
+    
+    // Content with exact same metrics
+    this.yPosition = cardStartY + 8 + (wrappedTitle.length * TITLE_LINE_HEIGHT) + 3;
+    
+    orderedEntries.forEach(([key, value]) => {
+      const keyLower = key.toLowerCase();
+      
+      if (!allowedForCard.includes(keyLower)) return;
+      if (!value || typeof value !== 'string' || value.trim().length === 0) return;
+      
+      const cleanValue = this.sanitizeTextForPDF(String(value));
+      if (!cleanValue || cleanValue.trim().length === 0) return;
+      
+      const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+      const cleanLabel = this.sanitizeTextForPDF(label);
+      
+      // Label with exact metrics
+      this.doc.setTextColor(...colors.accent);
+      this.doc.setFont('helvetica', 'bold');
+      this.doc.setFontSize(LABEL_FONT_SIZE);
+      this.doc.setCharSpace(0);
+      this.doc.text(`${cleanLabel}:`, this.margin, this.yPosition);
+      this.yPosition += LABEL_LINE_HEIGHT;
+      
+      // Content with exact metrics
+      this.doc.setTextColor(keyLower === 'eyeflowpath' || keyLower === 'eyeflow' ? 40 : 51, keyLower === 'eyeflowpath' || keyLower === 'eyeflow' ? 40 : 51, keyLower === 'eyeflowpath' || keyLower === 'eyeflow' ? 40 : 51);
+      this.doc.setFont('helvetica', 'normal');
+      this.doc.setFontSize(CONTENT_FONT_SIZE);
+      this.doc.setCharSpace(0);
+      
+      if (keyLower === 'eyeflowpath' || keyLower === 'eyeflow') {
+        const formattedFlow = cleanValue.replace(/\s*->\s*/g, ' -> ');
+        const flowLines = this.wrapText(formattedFlow, safeTextWidth - 8);
+        flowLines.forEach((line) => {
+          const cleanLine = this.sanitizeTextForPDF(line);
+          this.doc.text(cleanLine, this.margin + 2, this.yPosition);
+          this.yPosition += CONTENT_LINE_HEIGHT;
+        });
+      } else {
+        const valueLines = this.wrapText(cleanValue, safeTextWidth - 8);
+        valueLines.forEach((line) => {
+          const cleanLine = this.sanitizeTextForPDF(line);
+          this.doc.text(cleanLine, this.margin + 2, this.yPosition);
+          this.yPosition += CONTENT_LINE_HEIGHT;
+        });
+      }
+      
+      this.yPosition += FIELD_SPACING;
+    });
+    
+    // STEP 5: Position for next card
+    this.yPosition = cardStartY + exactHeight + 8;
   }
 
   private addSectionHeaderProfessional(title: string): void {
     this.checkNewPage(50); // Ignore return value for this method
     
     // Reduce spacing for specific sections
-    if (title === 'Copy Suggestions' || title === 'Quick Wins' || title === 'Visual CRO Analysis') {
+    if (title === 'Quick Wins') {
+      this.yPosition += 4; // 50% reduction for Quick Wins
+    } else if (title === 'Copy Suggestions' || title === 'Visual CRO Analysis') {
       this.yPosition += 8;
     } else if (title === 'Executive Summary') {
-      this.yPosition += 10; // Reduced spacing for Executive Summary
+      this.yPosition += 6; // 40% reduction for Executive Summary header spacing
     } else {
       this.yPosition += 15;
     }
@@ -1439,7 +1576,15 @@ export class PDFExporter {
     this.doc.setFont('helvetica', 'bold');
     this.doc.setTextColor(255, 255, 255);
     this.doc.text(title, this.margin, this.yPosition);
-    this.yPosition += 25;
+    
+    // Reduce post-header spacing for Quick Wins by 50% and Executive Summary by 40%
+    if (title === 'Quick Wins') {
+      this.yPosition += 12; // 50% reduction from 25 to 12
+    } else if (title === 'Executive Summary') {
+      this.yPosition += 15; // 40% reduction from 25 to 15
+    } else {
+      this.yPosition += 25;
+    }
     
     this.doc.setTextColor(...this.colors.text);
   }
@@ -1468,18 +1613,19 @@ export class PDFExporter {
     const wrappedFooter = this.wrapText(footerText, this.pageWidth - (2 * this.margin));
     const footerHeight = (wrappedFooter.length * 4) + 15 + 10; // Text lines + spacing + separator + timestamp
     
-    // Check if we need a new page for the footer
-    const bottomMargin = this.margin + 10;
-    const availableSpace = this.pageHeight - bottomMargin;
+    // Always position footer at the very bottom of the page, regardless of content
+    const bottomMargin = this.margin;
+    const targetFooterY = this.pageHeight - bottomMargin - footerHeight;
     
-    if (this.yPosition + footerHeight > availableSpace) {
+    // Check if there's enough space on current page for footer
+    if (this.yPosition + footerHeight + 30 > this.pageHeight - bottomMargin) {
+      // Not enough space, create new page for footer
       this.doc.addPage();
-      this.yPosition = this.margin;
+      this.addBrandLogo(); // Add logo to the new page
     }
     
-    // Position footer at bottom of page with proper spacing
-    const targetFooterY = this.pageHeight - this.margin - footerHeight;
-    this.yPosition = Math.max(this.yPosition, targetFooterY);
+    // Always position footer at absolute bottom regardless of current content position
+    this.yPosition = this.pageHeight - bottomMargin - footerHeight;
     
     // Professional separator line
     this.doc.setDrawColor(...this.colors.secondary);
@@ -1550,7 +1696,7 @@ export class PDFExporter {
   private sanitizeTextForPDF(text: string): string {
     if (!text) return '';
     
-    // More aggressive cleaning to prevent character spacing issues
+    // AGGRESSIVE cleaning to prevent ANY spacing issues
     let cleanText = text
       // Remove or replace problematic characters that might cause rendering issues
       .replace(/[\u200B-\u200F\u2028-\u202F\u205F-\u206F]/g, '') // Remove zero-width and formatting characters
@@ -1578,17 +1724,27 @@ export class PDFExporter {
         };
         return charMap[char] || char;
       })
-      .trim();
+      // AGGRESSIVE trailing whitespace removal
+      .replace(/\s+$/g, '') // Remove ALL trailing whitespace
+      .replace(/^\s+/g, '') // Remove ALL leading whitespace
+      .replace(/\n+$/g, '') // Remove trailing newlines
+      .replace(/^\n+/g, '') // Remove leading newlines
+      .replace(/\r+$/g, '') // Remove trailing carriage returns
+      .replace(/^\r+/g, ''); // Remove leading carriage returns
     
-    // Normalize whitespace - replace multiple spaces with single space
+    // Normalize internal whitespace - replace multiple spaces/tabs/newlines with single space
     cleanText = cleanText.replace(/\s+/g, ' ');
+    
+    // Final aggressive trim
+    cleanText = cleanText.trim();
     
     // Final check - if we still have unusual characters, force ASCII-only
     if (/[^\x20-\x7E]/.test(cleanText)) {
       cleanText = cleanText.replace(/[^\x20-\x7E]/g, '');
     }
     
-    return cleanText;
+    // One more final trim after character replacement
+    return cleanText.trim();
   }
 
   private checkNewPage(requiredSpace: number): boolean {
@@ -1600,6 +1756,10 @@ export class PDFExporter {
     if (this.yPosition + requiredSpace > availableSpace) {
       this.doc.addPage();
       this.yPosition = this.margin + 2; // Minimal top margin on new pages to reduce empty space
+      
+      // Add brand logo to the new page
+      this.addBrandLogo();
+      
       return true; // Return true to indicate a new page was created
     }
     return false; // Return false if no new page was needed

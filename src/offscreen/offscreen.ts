@@ -192,6 +192,7 @@ CUSTOMER JOURNEY MAPPING REQUIREMENTS:
 - Note potential friction points and drop-off areas
 - End with the primary conversion action and next steps
 - Use numbered steps that reflect the actual page flow and content order
+- Dont be overly detailed, just enough to get the point across.
 
 ANALYSIS DEPTH REQUIRED: Your analysis must be comprehensive enough to justify a $5,000+ consulting fee. Every recommendation must be:
 1. Backed by industry-specific conversion psychology principles
@@ -907,7 +908,7 @@ async function runAnalysis({ key, url, model, params }: any): Promise<void> {
     
     console.log(`✅ [Offscreen] Analysis completed for key: ${key}`);
     
-    // Optional cleanup after 12 hours
+    // Optional cleanup after 4 days (double the cache duration for safety)
     setTimeout(async () => {
       try {
         await chrome.runtime.sendMessage({
@@ -918,7 +919,7 @@ async function runAnalysis({ key, url, model, params }: any): Promise<void> {
       } catch (cleanupError) {
         console.warn(`⚠️ [Offscreen] TTL cleanup failed for key: ${key}`, cleanupError);
       }
-    }, 12 * 60 * 60 * 1000);
+    }, 4 * 24 * 60 * 60 * 1000);
     
   } catch (error) {
     console.error(`❌ [Offscreen] Analysis failed for key: ${key}`, error);
