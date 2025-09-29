@@ -62,6 +62,15 @@ PURCHASE BEHAVIOR ADAPTATION:
 - For HIGH-CONSIDERATION: Focus on trust building, detailed information, social proof, risk reduction, consultative approach, longer-form content, multiple touchpoints
 - For IMPULSE/LOW-CONSIDERATION: Focus on simplicity, speed, urgency, clear CTAs, streamlined process, immediate gratification
 
+CUSTOMER JOURNEY MAPPING REQUIREMENTS:
+- Start with the visitor's entry point (search intent, traffic source, mindset)
+- Map each section of the page in sequence as the customer scrolls
+- Identify decision points and conversion moments throughout the page
+- Note potential friction points and drop-off areas
+- End with the primary conversion action and next steps
+- Use numbered steps that reflect the actual page flow and content order
+- Don't be overly detailed, just enough to get the point across, 1 sentence per step.
+
 ANALYSIS DEPTH REQUIRED: Your analysis must be comprehensive enough to justify a $5,000+ consulting fee. Every recommendation must be:
 1. Backed by industry-specific conversion psychology principles
 2. Tailored to the identified page type and user intent
@@ -86,23 +95,32 @@ MOBILE OPTIMIZED: ${rawData.pageMetadata.viewportMeta.includes('width=device-wid
 ${rawData.fullTextContent}
 
 === STRUCTURAL ANALYSIS ===
-HEADINGS (Hierarchy & Positioning):
-${rawData.structuredContent.headings.map((h: any, i: number) => `${h.tag.toUpperCase()}: "${h.text}" (${h.position.top}px from top, Font: ${h.styles.fontSize}/${h.styles.fontWeight})`).join('\n')}
+CONTENT HIERARCHY:
+${rawData.structuredContent.headings.map((h: any, i: number) => {
+  const position = h.position || { top: 0 };
+  const placement = position.top < 600 ? 'Above fold' : position.top < 1200 ? 'Mid-page' : 'Below fold';
+  return `${h.tag.toUpperCase()}: "${h.text}" (${placement})`;
+}).join('\n')}
 
-BUTTONS & CTAs (All Interactive Elements):
-${rawData.structuredContent.buttons.map((b: any, i: number) => `${b.tag.toUpperCase()}: "${b.text}" (${b.position.top}px from top, ${b.position.width}x${b.position.height}px, BG: ${b.styles.backgroundColor}, Color: ${b.styles.color})`).join('\n')}
+KEY CTAs & BUTTONS:
+${rawData.structuredContent.buttons.map((b: any, i: number) => {
+  const position = b.position || { top: 0 };
+  const placement = position.top < 600 ? 'Above fold' : position.top < 1200 ? 'Mid-page' : 'Below fold';
+  const hasGoodContrast = b.styles?.backgroundColor && b.styles?.backgroundColor !== 'transparent' && b.styles?.backgroundColor !== 'rgba(0, 0, 0, 0)';
+  return `${b.tag.toUpperCase()}: "${b.text}" (${placement}${hasGoodContrast ? ', Good contrast' : ', Low contrast'})`;
+}).join('\n')}
 
-FORMS (Conversion Friction Points):
-${rawData.structuredContent.forms.length > 0 ? rawData.structuredContent.forms.map((f: any, i: number) => `Form ${i+1}: ${f.totalFields} total fields, ${f.requiredFields} required, Action: "${f.action}", Method: ${f.method}`).join('\n') : 'NO FORMS DETECTED ON PAGE'}
+CONVERSION FORMS:
+${rawData.structuredContent.forms.length > 0 ? rawData.structuredContent.forms.map((f: any, i: number) => `Form ${i+1}: ${f.totalFields} fields (${f.requiredFields} required), Action: "${f.action}"`).join('\n') : 'NO FORMS DETECTED'}
 
-NAVIGATION LINKS:
-${rawData.structuredContent.links.slice(0, 15).map((l: any, i: number) => `"${l.text}" -> ${l.href}`).join('\n')}
+MAIN NAVIGATION & LINKS:
+${rawData.structuredContent.links.slice(0, 10).map((l: any, i: number) => `"${l.text}" -> ${l.href}`).join('\n')}
 
-CONTENT LISTS:
-${rawData.structuredContent.lists.map((l: any, i: number) => `${l.tag.toUpperCase()}: ${l.itemCount} items - ${l.items.slice(0, 3).join(', ')}${l.items.length > 3 ? '...' : ''}`).join('\n')}
+CONTENT STRUCTURE:
+${rawData.structuredContent.lists.map((l: any, i: number) => `${l.tag.toUpperCase()}: ${l.itemCount} items`).join('\n')}
 
-PAGE SECTIONS:
-${rawData.structuredContent.sections.map((s: any, i: number) => `${s.tag.toUpperCase()} (class: "${s.class}", id: "${s.id}"): "${s.textPreview.substring(0, 120)}..."`).join('\n')}
+PAGE FLOW:
+${rawData.structuredContent.sections.slice(0, 8).map((s: any, i: number) => `Section ${i+1}: "${s.textPreview.substring(0, 80)}..."`).join('\n')}
 
 === ANALYSIS REQUIREMENTS ===
 
@@ -126,7 +144,7 @@ ANALYSIS STRUCTURE:
    - Business type, audience, and conversion goals with industry context
    - Page type and its role in the conversion funnel
    - Purchase behavior analysis and implications
-   - Current user journey and key issues specific to this context
+   - Detailed customer journey analysis: Start with how customers arrive at this page, then map each step they take through the page content toward conversion, including decision points and potential drop-off areas
    - Top 3 strengths and top 3 weaknesses
 
 3. **ACTIONABLE RECOMMENDATIONS** 
@@ -156,7 +174,17 @@ Return analysis as JSON with this ENHANCED structure:
     "purchaseBehaviorType": "high-consideration",
     "primaryConversionGoal": "Upgrade to paid plan or start trial", 
     "targetAudience": "Team leaders and project managers at mid-size companies",
-    "currentUserJourney": ["Research solutions", "Compare features", "Evaluate pricing", "Seek social proof", "Trial or purchase"],
+    "currentUserJourney": [
+      "1. Arrive on page (likely from search for ADHD symptoms/clinics)",
+      "2. Identify with common ADHD symptoms and challenges", 
+      "3. Understand the problem of undiagnosed ADHD and traditional care barriers",
+      "4. Learn how Frida provides a solution (online, accessible, affordable)",
+      "5. Review social proof and success stories",
+      "6. Understand the 'how it works' process",
+      "7. Evaluate expert credentials and service offerings",
+      "8. Consider pricing and FAQs",
+      "9. Take the 'Free ADHD Symptoms Test' as a low-commitment first step"
+    ],
     "keyStrengths": ["Clear pricing tiers", "Industry-standard features", "Professional design"],
     "criticalWeaknesses": ["Weak social proof for enterprise segment", "No risk mitigation messaging", "Missing implementation support details"]
   },

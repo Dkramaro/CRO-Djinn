@@ -1,23 +1,117 @@
 import { CachedAudit, ExtensionSettings, LLMAnalysis, RawPageData } from '../types';
+import { EncryptionManager } from './encryption';
 
 export class StorageManager {
   private static readonly SETTINGS_KEY = 'extension_settings';
   private static readonly CACHE_PREFIX = 'audit_cache_';
 
   static async getSettings(): Promise<ExtensionSettings> {
-    const result = await chrome.storage.sync.get(this.SETTINGS_KEY);
-    return result[this.SETTINGS_KEY] || { 
-      provider: 'openai', 
-      openaiApiKey: '', 
-      geminiApiKey: '', 
-      openaiModel: 'gpt-5-mini', 
-      geminiModel: 'gemini-2.5-flash',
-      fullPageScreenshot: false
-    };
+    try {
+      const result = await chrome.storage.sync.get(this.SETTINGS_KEY);
+      const rawSettings = result[this.SETTINGS_KEY] || { 
+        provider: 'openai', 
+        openaiApiKey: '', 
+        geminiApiKey: '', 
+        openaiModel: 'gpt-5-mini', 
+        geminiModel: 'gemini-2.5-flash',
+        fullPageScreenshot: false
+      };
+
+      console.log('Raw settings retrieved:', {
+        hasSettings: !!result[this.SETTINGS_KEY],
+        provider: rawSettings.provider,
+        hasOpenaiKey: !!rawSettings.openaiApiKey,
+        hasGeminiKey: !!rawSettings.geminiApiKey,
+        openaiKeyLength: rawSettings.openaiApiKey?.length || 0,
+        geminiKeyLength: rawSettings.geminiApiKey?.length || 0
+      });
+
+      // Decrypt sensitive fields
+      const decryptedSettings = await EncryptionManager.decryptSettings(rawSettings);
+      
+      console.log('Decrypted settings:', {
+        provider: decryptedSettings.provider,
+        hasOpenaiKey: !!decryptedSettings.openaiApiKey,
+        hasGeminiKey: !!decryptedSettings.geminiApiKey,
+        openaiKeyLength: decryptedSettings.openaiApiKey?.length || 0,
+        geminiKeyLength: decryptedSettings.geminiApiKey?.length || 0,
+        openaiKeyPrefix: decryptedSettings.openaiApiKey?.substring(0, 5) || '',
+        geminiKeyPrefix: decryptedSettings.geminiApiKey?.substring(0, 5) || ''
+      });
+
+      // Validate decrypted settings
+      const validation = this.validateSettings(decryptedSettings);
+      if (!validation.isValid) {
+        console.warn('Settings validation failed:', validation.errors);
+        // Don't throw error, just log warnings - allow user to fix in options
+      }
+
+      return decryptedSettings;
+    } catch (error) {
+      console.error('Failed to get settings:', error);
+      console.log('Returning default settings due to error');
+      
+      // Return safe defaults if settings are corrupted
+      return {
+        provider: 'openai',
+        openaiApiKey: '',
+        geminiApiKey: '',
+        openaiModel: 'gpt-5-mini',
+        geminiModel: 'gemini-2.5-flash',
+        fullPageScreenshot: false
+      };
+    }
   }
 
   static async saveSettings(settings: ExtensionSettings): Promise<void> {
-    await chrome.storage.sync.set({ [this.SETTINGS_KEY]: settings });
+    // Encrypt sensitive fields before storing
+    const encryptedSettings = await EncryptionManager.encryptSettings(settings);
+    console.log('Saving encrypted settings, field lengths:', {
+      openaiKeyLength: encryptedSettings.openaiApiKey?.length || 0,
+      geminiKeyLength: encryptedSettings.geminiApiKey?.length || 0
+    });
+    await chrome.storage.sync.set({ [this.SETTINGS_KEY]: encryptedSettings });
+  }
+
+  /**
+   * Clear corrupted settings and reset to defaults
+   */
+  static async clearCorruptedSettings(): Promise<void> {
+    console.log('Clearing potentially corrupted settings...');
+    await chrome.storage.sync.remove(this.SETTINGS_KEY);
+    console.log('Settings cleared. Users will need to re-enter API keys.');
+  }
+
+  /**
+   * Validate settings after decryption
+   */
+  static validateSettings(settings: ExtensionSettings): { isValid: boolean; errors: string[] } {
+    const errors: string[] = [];
+    
+    // Check OpenAI API key format if provider is openai or if key exists
+    if (settings.provider === 'openai' || settings.openaiApiKey) {
+      if (settings.openaiApiKey && !settings.openaiApiKey.startsWith('sk-')) {
+        errors.push('OpenAI API key should start with "sk-"');
+      }
+      if (settings.openaiApiKey && settings.openaiApiKey.length < 20) {
+        errors.push('OpenAI API key seems too short');
+      }
+    }
+    
+    // Check Gemini API key format if provider is gemini or if key exists
+    if (settings.provider === 'gemini' || settings.geminiApiKey) {
+      if (settings.geminiApiKey && !settings.geminiApiKey.startsWith('AIza')) {
+        errors.push('Gemini API key should start with "AIza"');
+      }
+      if (settings.geminiApiKey && settings.geminiApiKey.length < 30) {
+        errors.push('Gemini API key seems too short');
+      }
+    }
+    
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
   }
 
   static async getCachedAudit(url: string): Promise<CachedAudit | null> {
@@ -163,7 +257,7 @@ export class StorageManager {
     return `${this.CACHE_PREFIX}${btoa(normalizedUrl)}`;
   }
 
-  static async cleanOldCache(maxAgeMs: number = 7 * 24 * 60 * 60 * 1000): Promise<void> {
+  static async cleanOldCache(maxAgeMs: number = 24 * 60 * 60 * 1000): Promise<void> {
     const items = await chrome.storage.local.get();
     const now = Date.now();
     const keysToRemove: string[] = [];

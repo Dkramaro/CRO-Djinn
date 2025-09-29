@@ -138,6 +138,57 @@ body {
   opacity: 0.8;
 }
 
+/* Privacy Notice */
+.privacy-notice {
+  margin: 16px 0;
+  background: linear-gradient(135deg, #fff3e0 0%, #fdf8f0 100%);
+  border: 1px solid #ffcc02;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.privacy-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.privacy-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.privacy-text {
+  flex: 1;
+}
+
+.privacy-text p {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #5f4e00;
+}
+
+.privacy-text p:last-child {
+  margin-bottom: 0;
+}
+
+.privacy-details {
+  font-size: 12px !important;
+  opacity: 0.8;
+}
+
+.privacy-details a {
+  color: #5f4e00;
+  text-decoration: underline;
+  font-weight: 500;
+}
+
+.privacy-details a:hover {
+  opacity: 0.8;
+}
+
 /* Pro Tip */
 .pro-tip {
   display: flex;

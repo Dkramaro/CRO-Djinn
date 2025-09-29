@@ -231,6 +231,78 @@ body {
   border-color: #6b46c1;
 }
 
+.danger-button {
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.danger-button:hover {
+  background: #c82333;
+}
+
+.danger-button:disabled {
+  background: #9aa0a6;
+  cursor: not-allowed;
+}
+
+/* Privacy controls */
+.privacy-controls {
+  background: #f8f9fa;
+  border: 1px solid #e8eaed;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.privacy-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.privacy-info {
+  background: #e3f2fd;
+  border: 1px solid #bbdefb;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.privacy-info h4 {
+  margin: 0 0 12px 0;
+  color: #1565c0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.privacy-list {
+  margin: 0 0 16px 20px;
+  padding: 0;
+}
+
+.privacy-list li {
+  margin-bottom: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.privacy-note {
+  margin: 0;
+  font-size: 12px;
+  color: #1565c0;
+  background: rgba(21, 101, 192, 0.1);
+  padding: 8px 12px;
+  border-radius: 4px;
+  border-left: 3px solid #1565c0;
+}
+
 /* Loading spinner */
 .loading-spinner {
   width: 16px;

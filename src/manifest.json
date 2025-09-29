@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "CRO Djinn",
   "version": "1.0.0",
-  "description": "AI-powered landing page analysis to maximize conversion rates for paid traffic",
+  "description": "AI-powered landing page analysis with user consent and privacy controls to maximize conversion rates",
   "background": {
     "service_worker": "background.js",
     "type": "module"
@@ -17,7 +17,6 @@
     "notifications"
   ],
   "host_permissions": [
-    "<all_urls>",
     "https://api.openai.com/*",
     "https://generativelanguage.googleapis.com/*"
   ],

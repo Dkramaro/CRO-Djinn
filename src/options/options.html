@@ -116,27 +116,55 @@
           </div>
         </section>
 
-        <!-- Cache Management -->
+        <!-- Privacy & Data Management -->
         <section class="section">
-          <h2 class="section-title">Cache Management</h2>
+          <h2 class="section-title">Privacy & Data Management</h2>
           <p class="section-description">
-            Manage cached audit results to improve performance and save API costs.
+            Manage your privacy settings and control what data is stored locally.
           </p>
 
-          <div class="cache-info">
+          <div class="privacy-controls">
+            <div class="info-item">
+              <span class="info-label">Site Consents:</span>
+              <span id="consents-count" class="info-value">Loading...</span>
+            </div>
             <div class="info-item">
               <span class="info-label">Cached Audits:</span>
               <span id="cache-count" class="info-value">Loading...</span>
             </div>
             <div class="info-item">
-              <span class="info-label">Cache Age:</span>
-              <span class="info-value">2 days maximum</span>
+              <span class="info-label">Data Retention:</span>
+              <span class="info-value">24 hours maximum</span>
             </div>
           </div>
 
-          <button id="clear-cache-button" class="secondary-button">
-            Clear All Cache
-          </button>
+          <div class="privacy-actions">
+            <button id="diagnostic-button" class="secondary-button">
+              🔍 Run Diagnostics
+            </button>
+            <button id="clear-consents-button" class="secondary-button">
+              Clear All Site Consents
+            </button>
+            <button id="clear-cache-button" class="secondary-button">
+              Clear All Cached Data
+            </button>
+            <button id="clear-all-data-button" class="danger-button">
+              Delete All Extension Data
+            </button>
+          </div>
+
+          <div class="privacy-info">
+            <h4>What Data Do We Collect?</h4>
+            <ul class="privacy-list">
+              <li><strong>Page Content:</strong> Text, headings, buttons, and form elements for analysis</li>
+              <li><strong>Screenshots:</strong> Optional page screenshots for visual analysis</li>
+              <li><strong>API Keys:</strong> Stored securely on your device, never transmitted elsewhere</li>
+              <li><strong>Analysis Results:</strong> Cached locally to improve performance</li>
+            </ul>
+            <p class="privacy-note">
+              <strong>Important:</strong> All data is processed locally and sent only to your selected AI provider. We never collect or transmit your data to our servers.
+            </p>
+          </div>
         </section>
 
         <!-- About -->

@@ -127,23 +127,14 @@ export class PageScraper {
       const text = heading.textContent?.trim();
       if (text && this.isVisible(heading)) {
         const rect = heading.getBoundingClientRect();
-        const styles = window.getComputedStyle(heading);
+        const topPosition = Math.round(rect.top + window.scrollY);
         
         headings.push({
           tag: heading.tagName?.toLowerCase() || '',
           text,
           visible: this.isVisible(heading),
           position: {
-            top: Math.round(rect.top + window.scrollY),
-            left: Math.round(rect.left + window.scrollX),
-            width: Math.round(rect.width),
-            height: Math.round(rect.height)
-          },
-          styles: {
-            fontSize: styles.fontSize,
-            fontWeight: styles.fontWeight,
-            color: styles.color,
-            textAlign: styles.textAlign
+            top: topPosition
           },
           index
         });
@@ -167,6 +158,12 @@ export class PageScraper {
       
       const rect = button.getBoundingClientRect();
       const styles = window.getComputedStyle(button);
+      const topPosition = Math.round(rect.top + window.scrollY);
+      
+      // Simple contrast check - does it have meaningful background color?
+      const hasGoodContrast = styles.backgroundColor && 
+                             styles.backgroundColor !== 'transparent' && 
+                             styles.backgroundColor !== 'rgba(0, 0, 0, 0)';
       
       buttons.push({
         text,
@@ -174,23 +171,13 @@ export class PageScraper {
         type: (button as HTMLInputElement).type || 'button',
         visible: this.isVisible(button),
         position: {
-          top: Math.round(rect.top + window.scrollY),
-          left: Math.round(rect.left + window.scrollX),
-          width: Math.round(rect.width),
-          height: Math.round(rect.height)
+          top: topPosition
         },
         styles: {
-          backgroundColor: styles.backgroundColor,
-          color: styles.color,
-          fontSize: styles.fontSize,
-          padding: `${styles.paddingTop} ${styles.paddingRight} ${styles.paddingBottom} ${styles.paddingLeft}`,
-          border: styles.border,
-          borderRadius: styles.borderRadius
+          backgroundColor: styles.backgroundColor || 'transparent'
         },
         attributes: {
-          href: (button as HTMLAnchorElement).href || null,
-          class: this.cleanClassName(button.className),
-          id: button.id
+          href: (button as HTMLAnchorElement).href || null
         },
         index
       });
@@ -219,17 +206,7 @@ export class PageScraper {
         text,
         href,
         visible: this.isVisible(link),
-        position: {
-          top: Math.round(rect.top + window.scrollY),
-          left: Math.round(rect.left + window.scrollX),
-          width: Math.round(rect.width),
-          height: Math.round(rect.height)
-        },
-        styles: {
-          color: styles.color,
-          fontSize: styles.fontSize,
-          textDecoration: styles.textDecoration
-        },
+        textDecoration: styles.textDecoration,
         attributes: {
           class: this.cleanClassName(link.className),
           id: link.id,
@@ -249,19 +226,12 @@ export class PageScraper {
     formElements.forEach((form, index) => {
       if (this.isVisible(form)) {
         const inputs = Array.from(form.querySelectorAll('input, select, textarea')).map(input => {
-          const rect = input.getBoundingClientRect();
     return {
             tag: input.tagName?.toLowerCase() || '',
             type: (input as HTMLInputElement).type || 'text',
             name: (input as HTMLInputElement).name || '',
             placeholder: (input as HTMLInputElement).placeholder || '',
-            required: input.hasAttribute('required'),
-            position: {
-              top: Math.round(rect.top + window.scrollY),
-              left: Math.round(rect.left + window.scrollX),
-              width: Math.round(rect.width),
-              height: Math.round(rect.height)
-            }
+            required: input.hasAttribute('required')
           };
         });
 
@@ -291,14 +261,7 @@ export class PageScraper {
           src: img.src,
           alt: img.alt || '',
           title: img.title || '',
-          width: img.naturalWidth || rect.width,
-          height: img.naturalHeight || rect.height,
-          position: {
-            top: Math.round(rect.top + window.scrollY),
-            left: Math.round(rect.left + window.scrollX),
-            width: Math.round(rect.width),
-            height: Math.round(rect.height)
-          },
+          hasSize: !!(img.naturalWidth && img.naturalHeight),
           index
         });
       }
@@ -341,14 +304,8 @@ export class PageScraper {
             tag: section.tagName?.toLowerCase() || '',
             class: section.className,
             id: section.id,
-            textPreview: text,
-            position: {
-              top: Math.round(rect.top + window.scrollY),
-              left: Math.round(rect.left + window.scrollX),
-              width: Math.round(rect.width),
-              height: Math.round(rect.height)
-            },
-            index
+          textPreview: text,
+          index
           });
         }
       }
@@ -359,9 +316,8 @@ export class PageScraper {
 
   private getPageMetadata(): any {
     const viewport = {
-      width: window.innerWidth,
-      height: window.innerHeight,
-      scrollHeight: document.documentElement.scrollHeight
+      isMobile: window.innerWidth < 768,
+      hasVerticalScroll: document.documentElement.scrollHeight > window.innerHeight
     };
 
     // Get viewport meta tag
@@ -398,6 +354,27 @@ export class PageScraper {
       rect.width > 0 &&
       rect.height > 0
     );
+  }
+
+  private getContrastLevel(backgroundColor: string, textColor: string): string {
+    // Simple contrast assessment without exact calculations
+    if (!backgroundColor || !textColor) return 'unknown';
+    
+    // Basic heuristic based on color names/keywords
+    const bgLower = backgroundColor.toLowerCase();
+    const textLower = textColor.toLowerCase();
+    
+    if ((bgLower.includes('white') || bgLower.includes('rgb(255')) && 
+        (textLower.includes('black') || textLower.includes('rgb(0'))) {
+      return 'high';
+    }
+    
+    if ((bgLower.includes('black') || bgLower.includes('rgb(0')) && 
+        (textLower.includes('white') || textLower.includes('rgb(255'))) {
+      return 'high';
+    }
+    
+    return 'medium';
   }
 
   // === CONTENT FILTERING UTILITIES ===

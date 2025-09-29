@@ -1,4 +1,5 @@
 import { StorageManager } from '../utils/storage';
+import { ConsentManager } from '../utils/consent';
 import { ExtensionSettings } from '../types';
 
 class OptionsController {
@@ -13,6 +14,7 @@ class OptionsController {
   private geminiConfig: HTMLElement | null = null;
   private saveButton: HTMLButtonElement | null = null;
   private cacheCountElement: HTMLElement | null = null;
+  private consentsCountElement: HTMLElement | null = null;
 
   constructor() {
     this.initializeOptions();
@@ -24,6 +26,7 @@ class OptionsController {
       this.setupEventListeners();
       await this.loadSettings();
       await this.updateCacheInfo();
+      await this.updatePrivacyInfo();
     } catch (error) {
       console.error('Failed to initialize options:', error);
       this.showError('Failed to load settings');
@@ -42,6 +45,7 @@ class OptionsController {
     this.geminiConfig = document.getElementById('gemini-config');
     this.saveButton = document.getElementById('save-button') as HTMLButtonElement;
     this.cacheCountElement = document.getElementById('cache-count');
+    this.consentsCountElement = document.getElementById('consents-count');
 
     if (!this.providerSelect || !this.openaiApiKeyInput || !this.geminiApiKeyInput || 
         !this.openaiModelSelect || !this.geminiModelSelect || !this.fullPageScreenshotCheckbox || !this.saveButton ||
@@ -67,6 +71,25 @@ class OptionsController {
     clearCacheButton?.addEventListener('click', () => {
       this.clearCache();
     });
+
+    // Privacy control buttons
+    const clearConsentsButton = document.getElementById('clear-consents-button');
+    clearConsentsButton?.addEventListener('click', () => {
+      this.clearConsents();
+    });
+
+    const clearAllDataButton = document.getElementById('clear-all-data-button');
+    clearAllDataButton?.addEventListener('click', () => {
+      this.clearAllData();
+    });
+
+    // Debug diagnostic button
+    const diagnosticButton = document.getElementById('diagnostic-button');
+    if (diagnosticButton) {
+      diagnosticButton.addEventListener('click', () => {
+        this.runDiagnostics();
+      });
+    }
 
     // Form validation
     this.openaiApiKeyInput?.addEventListener('input', () => {
@@ -148,14 +171,48 @@ class OptionsController {
 
       const provider = this.providerSelect?.value as 'openai' | 'gemini' || 'openai';
       
+      // Get current values from the form, preserving existing keys for non-active providers
+      const currentSettings = await StorageManager.getSettings();
+      
+      // CRITICAL: Validate preserved keys are actual strings, not corrupted objects
+      const preservedOpenaiKey = provider !== 'openai' ? currentSettings.openaiApiKey : '';
+      const preservedGeminiKey = provider !== 'gemini' ? currentSettings.geminiApiKey : '';
+      
+      // Detect and reject [object Object] corruption
+      if (preservedOpenaiKey && (typeof preservedOpenaiKey !== 'string' || preservedOpenaiKey === '[object Object]')) {
+        console.error('🔧 CORRUPTION DETECTED in preserved OpenAI key:', preservedOpenaiKey);
+        throw new Error('Stored OpenAI API key is corrupted. Please re-enter it on the OpenAI provider settings.');
+      }
+      if (preservedGeminiKey && (typeof preservedGeminiKey !== 'string' || preservedGeminiKey === '[object Object]')) {
+        console.error('🔧 CORRUPTION DETECTED in preserved Gemini key:', preservedGeminiKey);
+        throw new Error('Stored Gemini API key is corrupted. Please re-enter it on the Gemini provider settings.');
+      }
+      
       const settings: ExtensionSettings = {
         provider,
-        openaiApiKey: this.openaiApiKeyInput?.value.trim() || '',
-        geminiApiKey: this.geminiApiKeyInput?.value.trim() || '',
+        // Only update the API key for the current provider, preserve others
+        openaiApiKey: provider === 'openai' 
+          ? (this.openaiApiKeyInput?.value.trim() || '') 
+          : preservedOpenaiKey,
+        geminiApiKey: provider === 'gemini' 
+          ? (this.geminiApiKeyInput?.value.trim() || '') 
+          : preservedGeminiKey,
         openaiModel: this.openaiModelSelect?.value || 'gpt-5',
         geminiModel: this.geminiModelSelect?.value || 'gemini-2.5-pro',
         fullPageScreenshot: this.fullPageScreenshotCheckbox?.checked || false
       };
+
+      console.log('🔧 Preparing to save settings:', {
+        provider: settings.provider,
+        preservingOpenaiKey: provider !== 'openai' && !!currentSettings.openaiApiKey,
+        preservingGeminiKey: provider !== 'gemini' && !!currentSettings.geminiApiKey,
+        openaiKeyLength: settings.openaiApiKey?.length || 0,
+        geminiKeyLength: settings.geminiApiKey?.length || 0,
+        openaiKeyType: typeof settings.openaiApiKey,
+        geminiKeyType: typeof settings.geminiApiKey,
+        openaiKeyPrefix: settings.openaiApiKey?.substring(0, 5) || 'empty',
+        geminiKeyPrefix: settings.geminiApiKey?.substring(0, 5) || 'empty'
+      });
 
       // Validate current provider's API key
       const currentApiKey = provider === 'openai' ? settings.openaiApiKey : settings.geminiApiKey;
@@ -265,6 +322,198 @@ class OptionsController {
     } catch (error) {
       console.error('Failed to clear cache:', error);
       this.showError('Failed to clear cache');
+    }
+  }
+
+  private async updatePrivacyInfo(): Promise<void> {
+    try {
+      const consents = await ConsentManager.getGrantedConsents();
+      if (this.consentsCountElement) {
+        this.consentsCountElement.textContent = `${consents.length} sites`;
+      }
+    } catch (error) {
+      console.error('Failed to get privacy info:', error);
+      if (this.consentsCountElement) {
+        this.consentsCountElement.textContent = 'Unknown';
+      }
+    }
+  }
+
+  private async clearConsents(): Promise<void> {
+    try {
+      const confirmed = confirm('Are you sure you want to clear all site consents? You will be prompted for consent again on all websites.');
+      
+      if (!confirmed) {
+        return;
+      }
+
+      await ConsentManager.clearAllConsents();
+      await this.updatePrivacyInfo();
+      this.showSuccess('Site consents cleared successfully!');
+    } catch (error) {
+      console.error('Failed to clear consents:', error);
+      this.showError('Failed to clear site consents');
+    }
+  }
+
+  private async clearAllData(): Promise<void> {
+    try {
+      const confirmed = confirm('⚠️ WARNING: This will delete ALL extension data including API keys, settings, cached results, and site consents. This action cannot be undone.\n\nAre you sure you want to continue?');
+      
+      if (!confirmed) {
+        return;
+      }
+
+      // Clear all storage areas
+      await Promise.all([
+        ConsentManager.clearAllConsents(),
+        StorageManager.clearCache(),
+        chrome.storage.sync.clear(),
+        chrome.storage.local.clear()
+      ]);
+
+      this.showSuccess('All extension data deleted successfully! Page will reload to reset settings.');
+      
+      // Reload the page after a short delay
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (error) {
+      console.error('Failed to clear all data:', error);
+      this.showError('Failed to delete all extension data');
+    }
+  }
+
+  private async runDiagnostics(): Promise<void> {
+    try {
+      console.log('🔍 Running settings diagnostics...');
+      
+      // Get raw storage data
+      const rawStorageResult = await chrome.storage.sync.get('extension_settings');
+      const rawSettings = rawStorageResult.extension_settings;
+      
+      console.log('Raw stored settings:', rawSettings);
+      
+      // Get decrypted settings
+      const decryptedSettings = await StorageManager.getSettings();
+      
+      console.log('Decrypted settings:', {
+        provider: decryptedSettings.provider,
+        hasOpenaiKey: !!decryptedSettings.openaiApiKey,
+        hasGeminiKey: !!decryptedSettings.geminiApiKey,
+        openaiKeyLength: decryptedSettings.openaiApiKey?.length || 0,
+        geminiKeyLength: decryptedSettings.geminiApiKey?.length || 0,
+        openaiKeyValid: this.isValidApiKey(decryptedSettings.openaiApiKey, 'openai'),
+        geminiKeyValid: this.isValidApiKey(decryptedSettings.geminiApiKey, 'gemini'),
+        openaiKeyPrefix: decryptedSettings.openaiApiKey?.substring(0, 5) || '',
+        geminiKeyPrefix: decryptedSettings.geminiApiKey?.substring(0, 5) || ''
+      });
+
+      // Check validation
+      const validation = StorageManager.validateSettings(decryptedSettings);
+      console.log('Settings validation:', validation);
+
+      // Show diagnostic results to user
+      const currentProvider = decryptedSettings.provider;
+      const currentKey = currentProvider === 'openai' ? decryptedSettings.openaiApiKey : decryptedSettings.geminiApiKey;
+      const keyValid = this.isValidApiKey(currentKey, currentProvider);
+
+      let message = `🔍 Diagnostics Results:\n\n`;
+      message += `Provider: ${currentProvider}\n`;
+      message += `Current API Key Valid: ${keyValid ? '✅ YES' : '❌ NO'}\n`;
+      message += `Current API Key Length: ${currentKey?.length || 0}\n`;
+      message += `Current API Key Prefix: "${currentKey?.substring(0, 10) || 'none'}..."\n\n`;
+      
+      if (!keyValid) {
+        message += `❌ Issue Detected: Your ${currentProvider.toUpperCase()} API key appears to be corrupted.\n\n`;
+        message += `Recommended Actions:\n`;
+        message += `1. Re-enter your API key manually\n`;
+        message += `2. Make sure it starts with "${currentProvider === 'openai' ? 'sk-' : 'AIza'}"\n`;
+        message += `3. Or clear all data and start fresh\n\n`;
+        message += `Check browser console for detailed logs.`;
+      } else {
+        message += `✅ Your API key appears to be valid.\n`;
+        message += `If you're still having issues, there might be a network or API quota problem.`;
+      }
+
+      alert(message);
+      
+      // Offer to clear corrupted settings or attempt automatic repair
+      if (!keyValid) {
+        const autoRepair = confirm('Would you like to attempt automatic repair of the corrupted API key? If that fails, we can clear all settings and start fresh.');
+        
+        if (autoRepair) {
+          try {
+            // Attempt to repair the settings
+            await this.attemptSettingsRepair();
+            this.showSuccess('Settings repair attempted. Please check if your API key is working now.');
+          } catch (repairError) {
+            console.error('Automatic repair failed:', repairError);
+            
+            const clearCorrupted = confirm('Automatic repair failed. Would you like to clear all corrupted settings? This will reset your API keys and you\'ll need to re-enter them.');
+            if (clearCorrupted) {
+              await chrome.runtime.sendMessage({ type: 'CLEAR_CORRUPTED_SETTINGS' });
+              this.showSuccess('Corrupted settings cleared. Please re-enter your API keys.');
+              setTimeout(() => {
+                window.location.reload();
+              }, 1500);
+            }
+          }
+        }
+      }
+
+    } catch (error) {
+      console.error('Diagnostics failed:', error);
+      this.showError('Failed to run diagnostics. Check console for details.');
+    }
+  }
+
+  private async attemptSettingsRepair(): Promise<void> {
+    console.log('🔧 Attempting automatic settings repair...');
+    
+    try {
+      // Get raw storage data directly
+      const rawResult = await chrome.storage.sync.get('extension_settings');
+      const rawSettings = rawResult.extension_settings;
+      
+      if (!rawSettings) {
+        throw new Error('No settings found to repair');
+      }
+      
+      console.log('🔧 Raw settings before repair:', rawSettings);
+      
+      // Repair logic: Ensure API keys are strings
+      const repairedSettings = { ...rawSettings };
+      let repairsMade = false;
+      
+      // Fix OpenAI API key if it's an object
+      if (repairedSettings.openaiApiKey && typeof repairedSettings.openaiApiKey !== 'string') {
+        console.log('🔧 Repairing OpenAI API key from:', typeof repairedSettings.openaiApiKey);
+        repairedSettings.openaiApiKey = String(repairedSettings.openaiApiKey);
+        repairsMade = true;
+      }
+      
+      // Fix Gemini API key if it's an object
+      if (repairedSettings.geminiApiKey && typeof repairedSettings.geminiApiKey !== 'string') {
+        console.log('🔧 Repairing Gemini API key from:', typeof repairedSettings.geminiApiKey);
+        repairedSettings.geminiApiKey = String(repairedSettings.geminiApiKey);
+        repairsMade = true;
+      }
+      
+      if (repairsMade) {
+        // Save the repaired settings
+        await chrome.storage.sync.set({ extension_settings: repairedSettings });
+        console.log('✅ Settings repair complete');
+        
+        // Reload the form to show the repaired settings
+        await this.loadSettings();
+      } else {
+        console.log('ℹ️ No repairs needed - settings appear to be valid');
+      }
+      
+    } catch (error) {
+      console.error('🔧 Settings repair failed:', error);
+      throw error;
     }
   }
 

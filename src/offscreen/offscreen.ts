@@ -198,9 +198,11 @@ ANALYSIS DEPTH REQUIRED: Your analysis must be comprehensive enough to justify a
 1. Backed by industry-specific conversion psychology principles
 2. Tailored to the identified page type and user intent
 3. Appropriate for the purchase behavior type (high vs low consideration)
-4. Detailed with step-by-step implementation
+4. Include detailed step-by-step implementation instructions in the "implementation" array
 5. Prioritized by conversion impact potential for this specific context
 6. Supported by industry-specific benchmarks and best practices
+
+IMPLEMENTATION REQUIREMENT: Every recommendation MUST include 3-5 specific, actionable implementation steps that a developer or designer can execute immediately.
 
 OUTPUT QUALITY: This analysis should read like a professional consulting report that demonstrates deep understanding of the specific industry, page type, and customer psychology.`;
 
@@ -218,27 +220,35 @@ MOBILE OPTIMIZED: ${rawData.pageMetadata.viewportMeta.includes('width=device-wid
 ${rawData.fullTextContent}
 
 === STRUCTURAL ANALYSIS ===
-HEADINGS (Hierarchy & Positioning):
-${rawData.structuredContent.headings.map((h: any) => `${h.tag.toUpperCase()}: "${h.text}" (${h.position.top}px from top, Font: ${h.styles.fontSize}/${h.styles.fontWeight})`).join('\n')}
+CONTENT HIERARCHY:
+${rawData.structuredContent.headings.map((h: any) => {
+  const position = h.position || { top: 0 };
+  const placement = position.top < 600 ? 'Above fold' : position.top < 1200 ? 'Mid-page' : 'Below fold';
+  return `${h.tag.toUpperCase()}: "${h.text}" (${placement})`;
+}).join('\n')}
 
-BUTTONS & CTAs (All Interactive Elements):
-${rawData.structuredContent.buttons.map((b: any) => `${b.tag.toUpperCase()}: "${b.text}" (${b.position.top}px from top, ${b.position.width}x${b.position.height}px, BG: ${b.styles.backgroundColor}, Color: ${b.styles.color})`).join('\n')}
+KEY CTAs & BUTTONS:
+${rawData.structuredContent.buttons.map((b: any) => {
+  const position = b.position || { top: 0 };
+  const placement = position.top < 600 ? 'Above fold' : position.top < 1200 ? 'Mid-page' : 'Below fold';
+  const hasGoodContrast = b.styles?.backgroundColor && b.styles?.backgroundColor !== 'transparent' && b.styles?.backgroundColor !== 'rgba(0, 0, 0, 0)';
+  return `${b.tag.toUpperCase()}: "${b.text}" (${placement}${hasGoodContrast ? ', Good contrast' : ', Low contrast'})`;
+}).join('\n')}
 
-FORMS (Conversion Friction Points):
-${rawData.structuredContent.forms.length > 0 ? rawData.structuredContent.forms.map((f: any, i: number) => `Form ${i+1}: ${f.totalFields} total fields, ${f.requiredFields} required, Action: "${f.action}", Method: ${f.method}`).join('\n') : 'NO FORMS DETECTED ON PAGE'}
+CONVERSION FORMS:
+${rawData.structuredContent?.forms?.length > 0 ? rawData.structuredContent.forms.map((f: any, i: number) => `Form ${i+1}: ${f.totalFields || 0} fields (${f.requiredFields || 0} required), Action: "${f.action || 'No action'}"`).join('\n') : 'NO FORMS DETECTED'}
 
-NAVIGATION LINKS:
-${rawData.structuredContent.links.slice(0, 15).map((l: any) => `"${l.text}" -> ${l.href}`).join('\n')}
+MAIN NAVIGATION & LINKS:
+${rawData.structuredContent?.links?.slice(0, 10).map((l: any) => `"${l.text || 'No text'}" -> ${l.href || '#'}`).join('\n') || 'NO NAVIGATION LINKS'}
 
 KEY CONVERSION ELEMENTS (For Customer Journey Mapping):
-MAIN CTAs: ${rawData.structuredContent.buttons.filter((b: any) => b.text && b.text.trim()).map((b: any) => `"${b.text}"`).join(', ')}
-SECTION FLOW: ${rawData.structuredContent.sections.slice(0, 8).map((s: any, i: number) => `${i+1}. ${s.textPreview.substring(0, 60)}...`).join(' → ')}
+MAIN CTAs: ${rawData.structuredContent?.buttons?.filter((b: any) => b.text && b.text.trim()).map((b: any) => `"${b.text}"`).join(', ') || 'NO CTAs FOUND'}
 
-CONTENT LISTS:
-${rawData.structuredContent.lists.map((l: any) => `${l.tag.toUpperCase()}: ${l.itemCount} items - ${l.items.slice(0, 3).join(', ')}${l.items.length > 3 ? '...' : ''}`).join('\n')}
+CONTENT STRUCTURE:
+${rawData.structuredContent?.lists?.map((l: any) => `${l.tag?.toUpperCase() || 'UNKNOWN'}: ${l.itemCount || 0} items`).join('\n') || 'NO CONTENT LISTS'}
 
-PAGE SECTIONS:
-${rawData.structuredContent.sections.map((s: any) => `${s.tag.toUpperCase()} (class: "${s.class}", id: "${s.id}"): "${s.textPreview.substring(0, 120)}..."`).join('\n')}
+PAGE FLOW:
+${rawData.structuredContent?.sections?.slice(0, 8).map((s: any, i: number) => `Section ${i+1}: "${s.textPreview?.substring(0, 80) || 'No preview'}..."`).join('\n') || 'NO PAGE SECTIONS'}
 
 ${screenshots.length > 1 ? `=== VISUAL ANALYSIS ===
 You have access to ${screenshots.length} sequential screenshots of the complete page from top to bottom. Use these to analyze:
@@ -281,7 +291,8 @@ ANALYSIS STRUCTURE:
    - Top 3 strengths and top 3 weaknesses
 
 3. **ACTIONABLE RECOMMENDATIONS** 
-   - 5-7 prioritized, industry-specific recommendations with implementation details
+   - 5-7 prioritized, industry-specific recommendations with detailed step-by-step implementation
+   - Each recommendation MUST include an "implementation" array with 3-5 specific, actionable steps
    - Psychological principles behind each recommendation (adapted for purchase behavior type)
    - Effort level and timeline for each
    - Industry-specific best practices and benchmarks
@@ -296,6 +307,8 @@ ANALYSIS STRUCTURE:
    - VISUAL FLOW ANALYSIS: How does the eye naturally flow through the page? Do colors and content hierarchy guide users toward CTAs? Are there visual distractions that pull attention away from conversion goals?
    - COLOR & CONTRAST EVALUATION: How effective are the color choices for conversion? Is there sufficient contrast for readability and CTA prominence? Do colors create the right emotional response for the target audience?
    - CRITICAL VISUAL ISSUE: What's the single biggest visual problem preventing conversions? Focus on business impact and user behavior. Provide clear, non-technical solutions that marketers and executives can understand and implement. Avoid technical details like hex codes, pixel measurements, or CSS specifications. Instead, describe the problem in terms of user experience and business outcomes, then provide simple, actionable solutions that can be communicated to designers and developers.
+
+CRITICAL: Each recommendation MUST include a detailed "implementation" array with step-by-step instructions.
 
 Return analysis as JSON with this ENHANCED structure:
 {
@@ -327,7 +340,13 @@ Return analysis as JSON with this ENHANCED structure:
       "priority": "critical",
       "issue": "B2B buyers need validation from similar companies before committing to paid plans",
       "solution": "Create dedicated section with enterprise customer logos, case studies, and ROI metrics specific to project management efficiency",
-      "implementation": ["Collect customer success metrics", "Design enterprise social proof section", "Add above pricing table", "Include industry-specific ROI data"],
+      "implementation": [
+        "Step 1: Collect customer success metrics and testimonials from existing clients",
+        "Step 2: Design a dedicated social proof section to place above the pricing table",
+        "Step 3: Add customer logos, case studies, and specific ROI data points",
+        "Step 4: Include industry-specific benchmarks and success metrics",
+        "Step 5: Test placement and messaging for maximum impact"
+      ],
       "psychologyBehind": "B2B high-consideration purchases require social proof from peers to reduce perceived risk and validate decision-making",
       "industryContext": "SaaS pricing pages convert 23% better with prominent customer logos and specific ROI metrics",
       "effort": 3,
@@ -913,7 +932,7 @@ async function runAnalysis({ key, url, model, params }: any): Promise<void> {
     
     console.log(`✅ [Offscreen] Analysis completed for key: ${key}`);
     
-    // Optional cleanup after 4 days (double the cache duration for safety)
+    // Optional cleanup after 2 days (double the cache duration for safety)
     setTimeout(async () => {
       try {
         await chrome.runtime.sendMessage({
@@ -924,7 +943,7 @@ async function runAnalysis({ key, url, model, params }: any): Promise<void> {
       } catch (cleanupError) {
         console.warn(`⚠️ [Offscreen] TTL cleanup failed for key: ${key}`, cleanupError);
       }
-    }, 4 * 24 * 60 * 60 * 1000);
+    }, 2 * 24 * 60 * 60 * 1000);
     
   } catch (error) {
     console.error(`❌ [Offscreen] Analysis failed for key: ${key}`, error);
@@ -1108,19 +1127,124 @@ async function callLLMDirectly({ pageData, url, model, params, screenshots }: an
       geminiApiKey: ''
     };
     
-    const settings = { ...defaultSettings, ...(settingsResponse.data || {}) };
+    // CRITICAL FIX: Decrypt the settings received from storage
+    // The storage proxy returns ENCRYPTED settings, we need to decrypt them
+    let rawSettings = { ...defaultSettings, ...(settingsResponse.data || {}) };
+    
+    console.log(`🤖 [Offscreen] Raw settings from storage (encrypted):`, {
+      openaiKeyType: typeof rawSettings.openaiApiKey,
+      openaiKeyLength: rawSettings.openaiApiKey?.length || 0,
+      openaiKeyPreview: rawSettings.openaiApiKey?.substring(0, 20) || 'empty'
+    });
+    
+    // Import and use EncryptionManager to decrypt
+    const { EncryptionManager } = await import('../utils/encryption.js');
+    const settings = await EncryptionManager.decryptSettings(rawSettings);
+    
+    console.log(`🤖 [Offscreen] Settings after decryption:`, {
+      openaiKeyType: typeof settings.openaiApiKey,
+      openaiKeyLength: settings.openaiApiKey?.length || 0,
+      openaiKeyPreview: settings.openaiApiKey?.substring(0, 10) || 'empty'
+    });
+    
+    // Debug: Log the exact types and values we received
+    console.log(`🤖 [Offscreen] Settings debug - raw data:`, settingsResponse.data);
+    console.log(`🤖 [Offscreen] Settings debug - types:`, {
+      openaiApiKeyType: typeof settings.openaiApiKey,
+      geminiApiKeyType: typeof settings.geminiApiKey,
+      openaiApiKeyValue: settings.openaiApiKey,
+      geminiApiKeyValue: settings.geminiApiKey
+    });
+    
+    // CRITICAL FIX: Detect [object Object] corruption and reject it
+    if (settings.openaiApiKey && typeof settings.openaiApiKey !== 'string') {
+      console.error('🔥 FATAL: OpenAI API key is corrupted (not a string):', {
+        type: typeof settings.openaiApiKey,
+        value: settings.openaiApiKey
+      });
+      throw new Error('OpenAI API key is corrupted in storage. Please go to extension settings and re-enter your API key.');
+    }
+    if (settings.geminiApiKey && typeof settings.geminiApiKey !== 'string') {
+      console.error('🔥 FATAL: Gemini API key is corrupted (not a string):', {
+        type: typeof settings.geminiApiKey,
+        value: settings.geminiApiKey
+      });
+      throw new Error('Gemini API key is corrupted in storage. Please go to extension settings and re-enter your API key.');
+    }
+    
+    // Additional check: Detect "[object Object]" string corruption
+    if (settings.openaiApiKey === '[object Object]') {
+      console.error('🔥 FATAL: OpenAI API key is the literal string "[object Object]"');
+      throw new Error('OpenAI API key is corrupted. Please clear extension data and re-enter your API key.');
+    }
+    if (settings.geminiApiKey === '[object Object]') {
+      console.error('🔥 FATAL: Gemini API key is the literal string "[object Object]"');
+      throw new Error('Gemini API key is corrupted. Please clear extension data and re-enter your API key.');
+    }
+    
     console.log(`🤖 [Offscreen] Settings retrieved:`, { 
       provider: settings.provider, 
       hasApiKey: !!(settings.openaiApiKey || settings.geminiApiKey),
       openaiKeyLength: settings.openaiApiKey?.length || 0,
       geminiKeyLength: settings.geminiApiKey?.length || 0,
+      openaiKeyType: typeof settings.openaiApiKey,
+      geminiKeyType: typeof settings.geminiApiKey,
       rawSettingsData: settingsResponse.data
     });
     
     const apiKey = settings.provider === 'gemini' ? settings.geminiApiKey : settings.openaiApiKey;
+    
+    // Validate API key exists and is a string
     if (!apiKey) {
       throw new Error(`${settings.provider === 'gemini' ? 'Gemini' : 'OpenAI'} API key not configured`);
     }
+    
+    // Additional type checking for API key
+    if (typeof apiKey !== 'string') {
+      console.error(`🤖 [Offscreen] API key is not a string:`, {
+        provider: settings.provider,
+        apiKeyType: typeof apiKey,
+        apiKeyValue: apiKey,
+        stringified: String(apiKey)
+      });
+      throw new Error(`Invalid API key format: ${typeof apiKey}. Expected string but got ${typeof apiKey}.`);
+    }
+    
+    // Validate API key format
+    if (settings.provider === 'openai') {
+      if (!apiKey.startsWith('sk-') || apiKey.length < 20) {
+        console.error('Invalid OpenAI API key format:', {
+          apiKeyType: typeof apiKey,
+          startsWithSk: apiKey.startsWith('sk-'),
+          length: apiKey.length,
+          preview: apiKey.substring(0, 20) + '...',
+          fullKey: apiKey
+        });
+        throw new Error('Invalid OpenAI API key format. Key should start with "sk-" and be at least 20 characters long.');
+      }
+    } else if (settings.provider === 'gemini') {
+      if (!apiKey.startsWith('AIza') || apiKey.length < 30) {
+        console.error('Invalid Gemini API key format:', {
+          apiKeyType: typeof apiKey,
+          startsWithAIza: apiKey.startsWith('AIza'),
+          length: apiKey.length,
+          preview: apiKey.substring(0, 20) + '...',
+          fullKey: apiKey
+        });
+        throw new Error('Invalid Gemini API key format. Key should start with "AIza" and be at least 30 characters long.');
+      }
+    }
+    
+    console.log(`🤖 [Offscreen] API key validation passed for ${settings.provider}`);
+    
+    // Log key characteristics for debugging
+    console.log(`🤖 [Offscreen] API key debug:`, {
+      provider: settings.provider,
+      keyLength: apiKey.length,
+      keyPrefix: apiKey.substring(0, 10),
+      keyHasSpecialChars: /[+\/=]/.test(apiKey),
+      keyIsBase64Like: /^[A-Za-z0-9+\/=]+$/.test(apiKey)
+    });
     
     // Use existing LLM analysis logic
     const rawData = pageData;
