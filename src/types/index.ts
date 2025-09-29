@@ -448,6 +448,7 @@ export interface AnalysisState {
   rawData?: RawPageData;
   fromCache?: boolean;
   error?: string;
+  progress?: string;
 }
 
 // Enhanced business-focused analysis types

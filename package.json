@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && copy src\\manifest.json dist\\ && xcopy icons dist\\icons\\ /E /I /Y",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -34,8 +34,8 @@ export class ScreenshotCapture {
       // Remove the data:image/png;base64, prefix to get just the base64 data
       const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
       
-      // Apply 30% compression for better token efficiency
-      return await this.compressScreenshot(base64Data, 0.4); // 60% reduction
+      // Apply 35% compression for better API cost efficiency
+      return await this.compressScreenshot(base64Data, 0.35); // 65% reduction
     } catch (error) {
       console.error('Screenshot capture failed:', error);
       throw new Error(`Failed to capture screenshot: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -49,8 +49,8 @@ export class ScreenshotCapture {
    */
   static async captureFullPage(options: ScreenshotCaptureOptions = {}): Promise<ScreenshotResult> {
     const {
-      maxScreenshots = 12,
-      scrollDelay = 500,
+      maxScreenshots = 20,
+      scrollDelay = 200, // Reduced from 500ms to 200ms for faster capture
       progressCallback
     } = options;
 
@@ -145,7 +145,7 @@ export class ScreenshotCapture {
         }
       });
 
-      await this.delay(scrollDelay);
+      await this.delay(Math.min(scrollDelay, 150)); // Cap initial delay at 150ms for faster start
 
       // Capture screenshots sequentially with improved positioning
       for (let i = 0; i < screenshotsNeeded; i++) {
@@ -199,8 +199,8 @@ export class ScreenshotCapture {
           console.warn(`Scroll positioning may be inaccurate for screenshot ${i + 1}`);
         }
 
-        // Wait for content to settle
-        await this.delay(scrollDelay);
+        // Wait for content to settle - reduced delay for faster capture
+        await this.delay(Math.min(scrollDelay, 100)); // Cap wait time at 100ms per screenshot
 
         // Capture screenshot with retry logic for quota limits
         const dataUrl = await this.captureWithRetry(windowId, 3);
@@ -215,29 +215,45 @@ export class ScreenshotCapture {
         const originalSize = this.getEstimatedSize(base64Data);
         console.log(`Screenshot ${i + 1} original size: ${Math.round(originalSize / 1024)}KB`);
         
-        const finalScreenshot = await this.compressScreenshot(base64Data, 0.4); // 60% reduction
-        const compressedSize = this.getEstimatedSize(finalScreenshot);
-        console.log(`Screenshot ${i + 1} compressed size: ${Math.round(compressedSize / 1024)}KB (${Math.round((1 - compressedSize/originalSize) * 100)}% reduction)`);
-        
-        anyCompressed = true;
-
-        screenshots.push(finalScreenshot);
-        totalSize += this.getEstimatedSize(finalScreenshot);
+        try {
+          const finalScreenshot = await this.compressScreenshot(base64Data, 0.35); // 65% reduction for 35% of original size
+          const compressedSize = this.getEstimatedSize(finalScreenshot);
+          const reductionPct = Math.round((1 - compressedSize/originalSize) * 100);
+          console.log(`Screenshot ${i + 1} compressed size: ${Math.round(compressedSize / 1024)}KB (${reductionPct}% reduction)`);
+          
+          // Use compressed image
+          screenshots.push(finalScreenshot);
+          totalSize += compressedSize;
+          anyCompressed = true;
+        } catch (compressionError) {
+          console.warn(`Screenshot ${i + 1} compression failed, using original:`, compressionError);
+          // Fallback: use original image if compression fails
+          screenshots.push(base64Data);
+          totalSize += originalSize;
+        }
 
         // Check if we've captured the full page (with some tolerance)
         const currentScrollTop = scrollVerification?.actualScrollTop || scrollTop;
         const remainingContent = totalHeight - (currentScrollTop + viewportHeight);
+        const remainingContentPercentage = remainingContent / viewportHeight;
         
-        console.log(`After screenshot ${i + 1}: scrollTop=${currentScrollTop}, remaining=${remainingContent}px`);
+        console.log(`After screenshot ${i + 1}: scrollTop=${currentScrollTop}, remaining=${remainingContent}px (${Math.round(remainingContentPercentage * 100)}% of viewport)`);
         
-        if (remainingContent <= 100) { // Less than 100px remaining
+        if (remainingContent <= 50) { // Absolute minimum threshold
           console.log(`Full page captured at screenshot ${i + 1}, remaining content: ${remainingContent}px`);
           break;
         }
+        
+        // Skip last screenshot if remaining content is less than 25% of viewport
+        // This saves tokens by avoiding screenshots of mostly empty space (footers, etc.)
+        if (remainingContentPercentage < 0.25 && i > 0) {
+          console.log(`Skipping final screenshot ${i + 1} - only ${Math.round(remainingContentPercentage * 100)}% of viewport would contain new content (footer/empty space)`);
+          break;
+        }
 
-        // Additional delay between screenshots to respect Chrome's quota
+        // Reduced delay between screenshots for faster capture while respecting Chrome's quota
         if (i < screenshotsNeeded - 1) {
-          await this.delay(1200); // 1.2 second delay between screenshots
+          await this.delay(600); // Reduced from 1200ms to 600ms for 2x faster capture
         }
 
         // Check total size limit (increased since we're compressing better)
@@ -296,62 +312,95 @@ export class ScreenshotCapture {
    */
   static async compressScreenshot(base64Data: string, targetRatio: number = 0.4): Promise<string> {
     try {
-      // For service worker context, check if we have access to DOM
+      // For service worker context, delegate compression to offscreen document
       if (typeof document === 'undefined' || !document.createElement) {
-        console.warn('Canvas not available in this context, returning original image');
-        return base64Data;
+        console.log('Service worker context detected - delegating compression to offscreen document');
+        
+        try {
+          // Send compression request to offscreen document where Canvas is available
+          const response = await chrome.runtime.sendMessage({
+            type: 'COMPRESS_IMAGE',
+            base64Data: base64Data,
+            targetRatio: targetRatio
+          });
+          
+          if (response?.ok && response.compressedData) {
+            const originalSize = this.getEstimatedSize(base64Data);
+            const compressedSize = this.getEstimatedSize(response.compressedData);
+            const compressionRatio = compressedSize / originalSize;
+            
+            console.log(`Compression via offscreen: ${Math.round(originalSize / 1024)}KB → ${Math.round(compressedSize / 1024)}KB (${Math.round((1 - compressionRatio) * 100)}% reduction)`);
+            return response.compressedData;
+          } else {
+            console.warn('Offscreen compression failed, returning original image');
+            return base64Data;
+          }
+        } catch (offscreenError) {
+          console.warn('Failed to communicate with offscreen document for compression:', offscreenError);
+          return base64Data;
+        }
       }
 
-      // Create canvas for compression
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        console.warn('Canvas context not available, returning original image');
-        return base64Data;
-      }
-
-      // Create image from base64
-      const img = new Image();
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error('Failed to load image for compression'));
-        img.src = `data:image/png;base64,${base64Data}`;
-      });
-
-      console.log(`Original image dimensions: ${img.width}x${img.height}`);
-
-      // Calculate dimensions for target compression - more aggressive reduction
-      const dimensionRatio = Math.sqrt(targetRatio);
-      const newWidth = Math.floor(img.width * dimensionRatio);
-      const newHeight = Math.floor(img.height * dimensionRatio);
-
-      console.log(`Target compressed dimensions: ${newWidth}x${newHeight} (${Math.round(dimensionRatio * 100)}% scale)`);
-
-      // Resize image with better quality settings
-      canvas.width = newWidth;
-      canvas.height = newHeight;
-      
-      // Use better image smoothing
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(img, 0, 0, newWidth, newHeight);
-
-      // Convert to JPEG with aggressive compression for token efficiency
-      const jpegQuality = 0.6; // Fixed 60% quality for consistent compression
-      const compressedDataUrl = canvas.toDataURL('image/jpeg', jpegQuality);
-      
-      const originalSize = this.getEstimatedSize(base64Data);
-      const compressedSize = this.getEstimatedSize(compressedDataUrl.replace(/^data:image\/jpeg;base64,/, ''));
-      const compressionRatio = compressedSize / originalSize;
-      
-      console.log(`Compression results: ${Math.round(originalSize / 1024)}KB → ${Math.round(compressedSize / 1024)}KB (${Math.round((1 - compressionRatio) * 100)}% reduction)`);
-      
-      return compressedDataUrl.replace(/^data:image\/jpeg;base64,/, '');
+      // Direct compression when Canvas is available (offscreen context)
+      return await this.compressImageDirect(base64Data, targetRatio);
 
     } catch (error) {
       console.warn('Screenshot compression failed, returning original image:', error);
       return base64Data;
     }
+  }
+
+  /**
+   * Direct image compression using Canvas (only works where DOM is available)
+   * @param base64Data Original base64 data
+   * @param targetRatio Target size ratio
+   * @returns Promise<string> Compressed base64 data
+   */
+  private static async compressImageDirect(base64Data: string, targetRatio: number): Promise<string> {
+    // Create canvas for compression
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Canvas context not available');
+    }
+
+    // Create image from base64
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('Failed to load image for compression'));
+      img.src = `data:image/png;base64,${base64Data}`;
+    });
+
+    console.log(`Original image dimensions: ${img.width}x${img.height}`);
+
+    // Calculate dimensions for target compression - more aggressive reduction
+    const dimensionRatio = Math.sqrt(targetRatio);
+    const newWidth = Math.floor(img.width * dimensionRatio);
+    const newHeight = Math.floor(img.height * dimensionRatio);
+
+    console.log(`Target compressed dimensions: ${newWidth}x${newHeight} (${Math.round(dimensionRatio * 100)}% scale)`);
+
+    // Resize image with better quality settings
+    canvas.width = newWidth;
+    canvas.height = newHeight;
+    
+    // Use better image smoothing
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, newWidth, newHeight);
+
+    // Convert to JPEG with aggressive compression for API cost efficiency
+    const jpegQuality = 0.4; // Reduced to 40% quality for better compression
+    const compressedDataUrl = canvas.toDataURL('image/jpeg', jpegQuality);
+    
+    const originalSize = this.getEstimatedSize(base64Data);
+    const compressedSize = this.getEstimatedSize(compressedDataUrl.replace(/^data:image\/jpeg;base64,/, ''));
+    const compressionRatio = compressedSize / originalSize;
+    
+    console.log(`Direct compression results: ${Math.round(originalSize / 1024)}KB → ${Math.round(compressedSize / 1024)}KB (${Math.round((1 - compressionRatio) * 100)}% reduction)`);
+    
+    return compressedDataUrl.replace(/^data:image\/jpeg;base64,/, '');
   }
 
   /**
@@ -364,8 +413,8 @@ export class ScreenshotCapture {
     const currentSize = this.getEstimatedSize(base64Data);
     
     if (currentSize <= maxSizeBytes) {
-      // Still apply 30% compression even if under limit for token efficiency
-      return await this.compressScreenshot(base64Data, 0.4);
+      // Still apply 35% compression even if under limit for API cost efficiency
+      return await this.compressScreenshot(base64Data, 0.35);
     }
 
     // For oversized images, calculate needed compression
@@ -396,8 +445,8 @@ export class ScreenshotCapture {
         console.warn(`Screenshot capture attempt ${attempt} failed:`, error);
         
         if (error instanceof Error && error.message.includes('MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND')) {
-          // Wait exponentially longer for quota errors
-          const waitTime = 2000 * Math.pow(2, attempt - 1); // 2s, 4s, 8s
+          // Reduced wait time for quota errors to speed up recovery
+          const waitTime = 800 * Math.pow(1.5, attempt - 1); // 800ms, 1200ms, 1800ms (faster recovery)
           console.log(`Quota exceeded, waiting ${waitTime}ms before retry ${attempt}/${maxRetries}`);
           await this.delay(waitTime);
           

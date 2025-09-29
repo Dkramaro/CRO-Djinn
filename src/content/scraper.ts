@@ -65,8 +65,19 @@ export class PageScraper {
             return NodeFilter.FILTER_REJECT;
           }
           
+          // Skip tracking/analytics elements
+          if (this.isTrackingElement(parent)) {
+            return NodeFilter.FILTER_REJECT;
+          }
+          
           // Skip hidden elements
           if (!this.isVisible(parent)) {
+            return NodeFilter.FILTER_REJECT;
+          }
+          
+          // Filter out tracking-related text content
+          const text = node.textContent?.trim() || '';
+          if (this.isTrackingText(text)) {
             return NodeFilter.FILTER_REJECT;
           }
           
@@ -85,7 +96,8 @@ export class PageScraper {
       }
     }
 
-    return textContent.trim();
+    // Clean up any remaining CSS/tracking noise from the content
+    return this.cleanContent(textContent.trim());
   }
 
   private extractStructuredContent(): any {
@@ -147,37 +159,41 @@ export class PageScraper {
     
     buttonElements.forEach((button, index) => {
       const text = button.textContent?.trim() || (button as HTMLInputElement).value || '';
-      if (text && this.isVisible(button)) {
-        const rect = button.getBoundingClientRect();
-        const styles = window.getComputedStyle(button);
-        
-        buttons.push({
-          text,
-          tag: button.tagName.toLowerCase(),
-          type: (button as HTMLInputElement).type || 'button',
-          visible: this.isVisible(button),
-          position: {
-            top: Math.round(rect.top + window.scrollY),
-            left: Math.round(rect.left + window.scrollX),
-            width: Math.round(rect.width),
-            height: Math.round(rect.height)
-          },
-          styles: {
-            backgroundColor: styles.backgroundColor,
-            color: styles.color,
-            fontSize: styles.fontSize,
-            padding: `${styles.paddingTop} ${styles.paddingRight} ${styles.paddingBottom} ${styles.paddingLeft}`,
-            border: styles.border,
-            borderRadius: styles.borderRadius
-          },
-          attributes: {
-            href: (button as HTMLAnchorElement).href || null,
-            class: button.className,
-            id: button.id
-          },
-          index
-        });
+      
+      // Filter out empty buttons, tracking elements, and meaningless buttons
+      if (!text || !this.isVisible(button) || this.isTrackingElement(button) || !this.isMeaningfulButton(text)) {
+        return;
       }
+      
+      const rect = button.getBoundingClientRect();
+      const styles = window.getComputedStyle(button);
+      
+      buttons.push({
+        text,
+        tag: button.tagName.toLowerCase(),
+        type: (button as HTMLInputElement).type || 'button',
+        visible: this.isVisible(button),
+        position: {
+          top: Math.round(rect.top + window.scrollY),
+          left: Math.round(rect.left + window.scrollX),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height)
+        },
+        styles: {
+          backgroundColor: styles.backgroundColor,
+          color: styles.color,
+          fontSize: styles.fontSize,
+          padding: `${styles.paddingTop} ${styles.paddingRight} ${styles.paddingBottom} ${styles.paddingLeft}`,
+          border: styles.border,
+          borderRadius: styles.borderRadius
+        },
+        attributes: {
+          href: (button as HTMLAnchorElement).href || null,
+          class: this.cleanClassName(button.className),
+          id: button.id
+        },
+        index
+      });
     });
 
     return buttons;
@@ -189,36 +205,41 @@ export class PageScraper {
     
     linkElements.forEach((link, index) => {
       const text = link.textContent?.trim();
-      if (text && this.isVisible(link)) {
-        const rect = link.getBoundingClientRect();
-        const styles = window.getComputedStyle(link);
-        
-        links.push({
-          text,
-          href: (link as HTMLAnchorElement).href,
-          visible: this.isVisible(link),
-          position: {
-            top: Math.round(rect.top + window.scrollY),
-            left: Math.round(rect.left + window.scrollX),
-            width: Math.round(rect.width),
-            height: Math.round(rect.height)
-          },
-          styles: {
-            color: styles.color,
-            fontSize: styles.fontSize,
-            textDecoration: styles.textDecoration
-          },
-          attributes: {
-            class: link.className,
-            id: link.id,
-            target: (link as HTMLAnchorElement).target
-          },
-          index
-        });
+      const href = (link as HTMLAnchorElement).href;
+      
+      // Filter out meaningless links and tracking elements
+      if (!text || !this.isVisible(link) || this.isTrackingElement(link) || !this.isMeaningfulLink(text, href)) {
+        return;
       }
+      
+      const rect = link.getBoundingClientRect();
+      const styles = window.getComputedStyle(link);
+      
+      links.push({
+        text,
+        href,
+        visible: this.isVisible(link),
+        position: {
+          top: Math.round(rect.top + window.scrollY),
+          left: Math.round(rect.left + window.scrollX),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height)
+        },
+        styles: {
+          color: styles.color,
+          fontSize: styles.fontSize,
+          textDecoration: styles.textDecoration
+        },
+        attributes: {
+          class: this.cleanClassName(link.className),
+          id: link.id,
+          target: (link as HTMLAnchorElement).target
+        },
+        index
+      });
     });
 
-    return links;
+    return links.slice(0, 15); // Limit to most important links
   }
 
   private getForms(): any[] {
@@ -377,6 +398,126 @@ export class PageScraper {
       rect.width > 0 &&
       rect.height > 0
     );
+  }
+
+  // === CONTENT FILTERING UTILITIES ===
+
+  private isTrackingElement(element: Element): boolean {
+    const id = element.id?.toLowerCase() || '';
+    const className = element.className?.toLowerCase() || '';
+    const tagName = element.tagName?.toLowerCase() || '';
+    
+    // Check for tracking-related IDs and classes
+    const trackingPatterns = [
+      'gtm', 'analytics', 'tracking', 'facebook', 'fbq', 'hotjar', 'segment',
+      'google-tag', 'ga-', 'utm_', 'cookie', 'consent', 'optanon'
+    ];
+    
+    return trackingPatterns.some(pattern => 
+      id.includes(pattern) || className.includes(pattern)
+    ) || element.closest('script, style, noscript');
+  }
+
+  private isTrackingText(text: string): boolean {
+    const lowerText = text.toLowerCase();
+    
+    // Skip tracking/analytics related text
+    const trackingKeywords = [
+      'window.___chunkmapping', 'window.___webpack', 'analytics.', 'fbq(',
+      'gtm.start', '_hjsettings', 'google-analytics', 'googletagmanager',
+      'hotjar', 'segment.com', 'optanonwrapper', 'dataLayer'
+    ];
+    
+    return trackingKeywords.some(keyword => lowerText.includes(keyword));
+  }
+
+  private isMeaningfulButton(text: string): boolean {
+    // Filter out empty or meaningless button text
+    if (!text || text.length === 0) return false;
+    
+    // Skip cookie/consent buttons (not relevant for CRO)
+    const skipPatterns = [
+      'accept all', 'manage consent', 'cookie settings', 'privacy settings',
+      'opt out', 'confirm my choices'
+    ];
+    
+    const lowerText = text.toLowerCase();
+    return !skipPatterns.some(pattern => lowerText.includes(pattern));
+  }
+
+  private isMeaningfulLink(text: string, href: string): boolean {
+    if (!text || text.length === 0) return false;
+    
+    const lowerText = text.toLowerCase();
+    const lowerHref = href.toLowerCase();
+    
+    // Skip footer/legal links (not relevant for CRO analysis)
+    const skipPatterns = [
+      'privacy policy', 'terms of use', 'terms of service', 'cookie policy',
+      'careers', 'contact us', 'about us', 'home', 'support', 'help',
+      'copyright', '©', 'powered by', 'email us', 'phone:', 'fax:',
+      'linkedin', 'twitter', 'facebook', 'youtube', 'instagram'
+    ];
+    
+    // Skip if it's a footer/legal type link
+    if (skipPatterns.some(pattern => lowerText.includes(pattern) || lowerHref.includes(pattern))) {
+      return false;
+    }
+    
+    // Skip if it's an anchor link or skip-to-content link
+    if (lowerText.includes('skip to') || href.startsWith('#')) {
+      return false;
+    }
+    
+    return true;
+  }
+
+  private cleanClassName(className: string): string {
+    if (!className) return '';
+    
+    // Remove generated class names but keep meaningful ones
+    const classes = className.split(' ').filter(cls => {
+      // Remove UUID-like class names
+      if (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(cls)) {
+        return false;
+      }
+      
+      // Remove generated section/module class names
+      if (/^(section|module|component)[a-f0-9]+$/i.test(cls)) {
+        return false;
+      }
+      
+      // Keep meaningful class names
+      const meaningfulPatterns = [
+        'btn', 'button', 'cta', 'primary', 'secondary', 'header', 'footer',
+        'nav', 'menu', 'form', 'input', 'submit', 'link'
+      ];
+      
+      return meaningfulPatterns.some(pattern => cls.toLowerCase().includes(pattern));
+    });
+    
+    return classes.join(' ');
+  }
+
+  private cleanContent(content: string): string {
+    // Remove CSS class patterns
+    content = content.replace(/\.[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/g, '');
+    content = content.replace(/\.section[a-f0-9-]+/g, '');
+    
+    // Remove CSS style blocks
+    content = content.replace(/\{[^}]*\}/g, '');
+    
+    // Remove JavaScript chunks and webpack references
+    content = content.replace(/window\.___[^;]+;?/g, '');
+    content = content.replace(/\{\\?"[^"]*\\?":\[\\?"[^"]*\\?"\]/g, '');
+    
+    // Remove tracking function calls
+    content = content.replace(/\b(fbq|gtag|analytics)\([^)]*\)/g, '');
+    
+    // Clean up multiple spaces and line breaks
+    content = content.replace(/\s+/g, ' ').trim();
+    
+    return content;
   }
 }
 

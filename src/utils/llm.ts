@@ -1,13 +1,22 @@
 import { RawPageData, LLMAnalysis, ExtensionSettings } from '../types';
 import { ScreenshotCapture } from './screenshot';
 
+/**
+ * @deprecated This class is deprecated as of the idempotency implementation.
+ * All LLM analysis now goes through the background script with proper idempotency.
+ * Use the background script's START_ANALYSIS message instead.
+ */
 export class LLMAnalyzer {
   private settings: ExtensionSettings;
 
   constructor(settings: ExtensionSettings) {
     this.settings = settings;
+    console.warn('⚠️ LLMAnalyzer is deprecated. Use background script analysis instead.');
   }
 
+  /**
+   * @deprecated Use background script START_ANALYSIS message instead
+   */
   async analyzeRawPageData(rawData: RawPageData, useFullPageScreenshots: boolean = false): Promise<LLMAnalysis> {
     const systemMessage = `You are a $10,000/day Senior Conversion Rate Optimization Consultant with 20+ years of experience across ALL industries. You've optimized pages for Fortune 500 companies and generated millions in additional revenue through conversion optimization.
 
@@ -234,51 +243,14 @@ STAR RATING CRITERIA:
 ⭐⭐ (2 Stars) - Good Foundation: 2-4 significant opportunities, basic elements present but not optimized for industry/purchase behavior, decent user experience but missing key conversion triggers
 ⭐⭐⭐ (3 Stars) - Well Optimized: 1-2 minor improvements possible, strong industry-appropriate conversion fundamentals, good psychology implementation, well-designed for target audience and page type`;
 
-    // Call appropriate API based on provider - NOTE: Screenshots are now pre-captured by background script
-    let content: string;
-    console.log('LLM Analysis starting - Provider:', this.settings.provider, 'Full Page:', useFullPageScreenshots);
-    console.log('IMPORTANT: This method should NOT be called directly anymore. Use background script instead.');
+    // This method is deprecated - all analysis now goes through background script
+    console.error('❌ LLMAnalyzer.analyzeRawPageData() called but is deprecated!');
+    console.error('Use background script START_ANALYSIS message instead for proper idempotency.');
     
-    // This method is now deprecated in favor of the offscreen document approach
-    // Screenshots should be pre-captured and passed in, not captured here
-    throw new Error('LLMAnalyzer.analyzeRawPageData() is deprecated. Use background script with offscreen document instead.');
-    
-    // Legacy code below - kept for reference but should not execute
-    if (this.settings.provider === 'gemini') {
-      content = await this.callGeminiAPI(systemMessage, userMessage);
-    } else {
-      content = await this.callOpenAIAPI(systemMessage, userMessage);
-    }
-
-    console.log('LLM API Response content length:', content?.length);
-    console.log('LLM API Response preview:', content?.substring(0, 500));
-    
-    if (!content || content.trim() === '') {
-      throw new Error('No response content from LLM');
-    }
-
-    try {
-      let analysis: any;
-      
-      // Try to parse as JSON first
-      try {
-        analysis = JSON.parse(content);
-      } catch (parseError) {
-        // If direct parsing fails, try to extract JSON from the response
-        const jsonMatch = content.match(/\{[\s\S]*\}/);
-        const firstMatch = jsonMatch?.[0];
-        if (firstMatch && typeof firstMatch === 'string') {
-          analysis = JSON.parse(firstMatch as string);
-        } else {
-          throw new Error('No valid JSON found in response');
-        }
-      }
-      
-      return this.validateAndSanitizeAnalysis(analysis);
-    } catch (error) {
-      console.error('LLM Response:', content);
-      throw new Error(`Failed to parse LLM response: ${error}. Response: ${content.substring(0, 200)}...`);
-    }
+    throw new Error(
+      'LLMAnalyzer is deprecated. Use chrome.runtime.sendMessage({ type: "START_ANALYSIS", tabId, url }) instead. ' +
+      'This ensures proper idempotency and prevents duplicate API calls.'
+    );
   }
 
   private validateAndSanitizeAnalysis(analysis: any): LLMAnalysis {
