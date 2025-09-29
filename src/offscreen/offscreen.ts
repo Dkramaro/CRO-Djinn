@@ -96,7 +96,7 @@ function initializeOffscreen() {
           
           const compressedData = await compressScreenshotInOffscreen(
             msg.base64Data, 
-            msg.targetRatio || 0.35 // Default to 35% of original size
+            msg.targetRatio || 0.5 // Default to 50% of original size for balanced compression
           );
           
           console.log('[Offscreen] Image compression successful');
@@ -192,7 +192,7 @@ CUSTOMER JOURNEY MAPPING REQUIREMENTS:
 - Note potential friction points and drop-off areas
 - End with the primary conversion action and next steps
 - Use numbered steps that reflect the actual page flow and content order
-- Dont be overly detailed, just enough to get the point across.
+- Dont be overly detailed, just enough to get the point across, 1 sentence per step.
 
 ANALYSIS DEPTH REQUIRED: Your analysis must be comprehensive enough to justify a $5,000+ consulting fee. Every recommendation must be:
 1. Backed by industry-specific conversion psychology principles
@@ -651,9 +651,9 @@ function attemptJSONRepair(content: string): string | null {
 
 /**
  * Compress screenshot in offscreen context where DOM APIs are available
- * Targets aggressive compression for optimal API cost efficiency
+ * Targets balanced compression for optimal file size while maintaining quality
  */
-async function compressScreenshotInOffscreen(base64Data: string, targetRatio: number = 0.35): Promise<string> {
+async function compressScreenshotInOffscreen(base64Data: string, targetRatio: number = 0.5): Promise<string> {
   try {
     const originalSize = Math.floor(base64Data.length * 0.75); // Estimate bytes from base64
     console.log(`[Offscreen] Starting compression of ${Math.round(originalSize / 1024)}KB image`);
@@ -673,7 +673,7 @@ async function compressScreenshotInOffscreen(base64Data: string, targetRatio: nu
 
     console.log(`[Offscreen] Original image dimensions: ${img.width}x${img.height}`);
 
-    // Calculate dimensions for aggressive compression - targeting ~35% of original size
+    // Calculate dimensions for balanced compression - targeting ~50% of original size
     const dimensionRatio = Math.sqrt(targetRatio);
     const newWidth = Math.floor(img.width * dimensionRatio);
     const newHeight = Math.floor(img.height * dimensionRatio);
@@ -688,8 +688,8 @@ async function compressScreenshotInOffscreen(base64Data: string, targetRatio: nu
     ctx.imageSmoothingQuality = 'high'; // Keep high quality during resize
     ctx.drawImage(img, 0, 0, newWidth, newHeight);
 
-    // Convert to JPEG with aggressive compression for optimal API cost efficiency
-    const jpegQuality = 0.4; // Reduced to 40% quality for maximum compression while maintaining readability
+    // Convert to JPEG with moderate compression for optimal API cost efficiency  
+    const jpegQuality = 0.5; // Moderate 50% quality for balanced compression and readability
     const compressedDataUrl = canvas.toDataURL('image/jpeg', jpegQuality);
     
     const compressedData = compressedDataUrl.replace(/^data:image\/jpeg;base64,/, '');

@@ -52,7 +52,13 @@ export class PDFExporter {
   private brandLogo: string;
 
   constructor() {
-    this.doc = new jsPDF('portrait', 'mm', 'a4');
+    // Enable PDF compression for smaller file size
+    this.doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+      compress: true  // Enable built-in PDF compression
+    });
     
     // Set encoding and font configuration to prevent character spacing issues
     this.doc.setCharSpace(0); // Ensure no character spacing
@@ -97,7 +103,7 @@ export class PDFExporter {
         loadImageAsBase64('icons/1 Star.png'),
         loadImageAsBase64('icons/2 star.png'),
         loadImageAsBase64('icons/3 Star.png'),
-        loadImageAsBase64('icons/CRO-Genie Logo.png')
+        loadImageAsBase64('icons/CRO-Djinn Logo.png')
       ]);
       
       this.starImages = {

@@ -1,6 +1,6 @@
 # Idempotency Implementation - Fixing Duplicate API Calls
 
-This document describes the architectural changes implemented to fix the duplicate API call issue in the CRO Genie extension.
+This document describes the architectural changes implemented to fix the duplicate API call issue in the CRO Djinn extension.
 
 ## Problem
 

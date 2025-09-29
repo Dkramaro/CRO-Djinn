@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "CRO Genie",
+  "name": "CRO Djinn",
   "version": "1.0.0",
   "description": "AI-powered landing page analysis to maximize conversion rates for paid traffic",
   "background": {
@@ -22,17 +22,17 @@
     "https://generativelanguage.googleapis.com/*"
   ],
   "icons": {
-    "16": "icons/CRO-Genie Logo.png",
-    "48": "icons/CRO-Genie Logo.png", 
-    "128": "icons/CRO-Genie Logo.png"
+    "16": "icons/CRO-Djinn Logo.png",
+    "48": "icons/CRO-Djinn Logo.png", 
+    "128": "icons/CRO-Djinn Logo.png"
   },
   "action": {
     "default_popup": "src/popup/popup.html",
-    "default_title": "CRO Genie",
+    "default_title": "CRO Djinn",
     "default_icon": {
-      "16": "icons/CRO-Genie Logo.png",
-      "48": "icons/CRO-Genie Logo.png",
-      "128": "icons/CRO-Genie Logo.png"
+      "16": "icons/CRO-Djinn Logo.png",
+      "48": "icons/CRO-Djinn Logo.png",
+      "128": "icons/CRO-Djinn Logo.png"
     }
   },
   "options_page": "src/options/options.html",

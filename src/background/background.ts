@@ -485,7 +485,7 @@ chrome.action.onClicked.addListener(async (tab) => {
     try {
       const hostname = new URL(tab.url).hostname;
       await NotificationManager.showProgressNotification({
-        title: 'CRO Genie',
+        title: 'CRO Djinn',
         message: `Opening analysis popup for ${hostname}`,
         step: 'Ready to analyze',
         progress: 0

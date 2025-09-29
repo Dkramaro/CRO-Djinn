@@ -61,7 +61,7 @@ export default defineConfig({
 <html>
 <head>
   <meta charset="utf-8">
-  <title>CRO Genie Offscreen</title>
+  <title>CRO Djinn Offscreen</title>
 </head>
 <body>
   <script type="module" src="../../offscreen-script.js"></script>
@@ -75,7 +75,7 @@ export default defineConfig({
 <html>
 <head>
   <meta charset="utf-8">
-  <title>CRO Genie Offscreen</title>
+  <title>CRO Djinn Offscreen</title>
 </head>
 <body>
   <script src="../../offscreen-minimal.js"></script>
@@ -94,8 +94,8 @@ export default defineConfig({
           
           // Copy main logo
           copyFileSync(
-            resolve(__dirname, 'icons/CRO-Genie Logo.png'),
-            resolve(__dirname, 'dist/icons/CRO-Genie Logo.png')
+            resolve(__dirname, 'icons/CRO-Djinn Logo.png'),
+            resolve(__dirname, 'dist/icons/CRO-Djinn Logo.png')
           );
           
           // Copy star rating images

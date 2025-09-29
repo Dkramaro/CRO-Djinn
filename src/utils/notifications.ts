@@ -1,5 +1,5 @@
 /**
- * Notification Manager for CRO Genie Extension
+ * Notification Manager for CRO Djinn Extension
  * Handles progress indicators, completion notifications, and badge management
  */
 
@@ -18,7 +18,7 @@ export interface ProgressNotificationOptions extends NotificationOptions {
 }
 
 export class NotificationManager {
-  private static readonly ICON_PATH = 'icons/CRO-Genie Logo.png';
+  private static readonly ICON_PATH = 'icons/CRO-Djinn Logo.png';
   private static readonly PROGRESS_NOTIFICATION_ID = 'cro-genie-progress';
   private static readonly COMPLETION_NOTIFICATION_ID = 'cro-genie-complete';
   
@@ -251,7 +251,7 @@ export class NotificationManager {
     try {
       await Promise.all([
         chrome.action.setBadgeText({ text: '' }),
-        chrome.action.setTitle({ title: 'CRO Genie' })
+        chrome.action.setTitle({ title: 'CRO Djinn' })
       ]);
     } catch (error) {
       console.warn('Failed to clear badge:', error);

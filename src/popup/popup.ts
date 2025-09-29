@@ -306,7 +306,7 @@ class PopupController {
 
     // Validate URL
     if (!this.isValidAnalysisUrl(this.currentUrl)) {
-      this.showError(`Cannot analyze this type of URL: ${this.currentUrl}. Please navigate to a regular website (http/https) to use CRO Genie.`);
+      this.showError(`Cannot analyze this type of URL: ${this.currentUrl}. Please navigate to a regular website (http/https) to use CRO Djinn.`);
       return;
     }
 
@@ -1096,7 +1096,7 @@ function initializePopup() {
         appElement.innerHTML = `
           <div style="padding: 20px; text-align: center;">
             <h3>⚠️ Extension Error</h3>
-            <p>Failed to initialize CRO Genie. Please try:</p>
+            <p>Failed to initialize CRO Djinn. Please try:</p>
             <ul style="text-align: left; margin: 10px 0;">
               <li>Reload this extension</li>
               <li>Refresh this page</li>

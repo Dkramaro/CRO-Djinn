@@ -8,14 +8,14 @@
 
 ### 1. ✅ Check Extension Console Outputs
 
-**Background Console** (`chrome://extensions` → CRO Genie → "Inspect views: background page"):
+**Background Console** (`chrome://extensions` → CRO Djinn → "Inspect views: background page"):
 ```
 [BG] Background service worker initializing...
 [BG] START_ANALYSIS key=analysis:https://example.com|abc123
 [BG] Offscreen document created
 ```
 
-**Offscreen Console** (`chrome://extensions` → CRO Genie → "Inspect views: offscreen.html"):
+**Offscreen Console** (`chrome://extensions` → CRO Djinn → "Inspect views: offscreen.html"):
 ```
 🔧 [Offscreen] Document loaded at: chrome-extension://abc.../src/offscreen/offscreen.html
 🔧 [Offscreen] chrome.storage.local available: true
@@ -51,7 +51,7 @@ chrome.storage.local.get("test").then(r => console.log("✅ Read:", r));
 
 ### 3. ✅ Extension Storage Inspector
 
-**In chrome://extensions → CRO Genie → "Storage":**
+**In chrome://extensions → CRO Djinn → "Storage":**
 - Look for entries like `job:analysis:https://example.com|abc123`
 - Should see `{state: "succeeded", result: {...}, updatedAt: ...}`
 - Should NOT see immediate cleanup (stays for hours)
@@ -139,7 +139,7 @@ if (!chrome?.storage?.local) {
 
 **Check Context:** In offscreen console, run `location.href`. Must be `chrome-extension://...`, not `blob:` or `data:`
 
-**Check Permissions:** `chrome://extensions` → CRO Genie → Details → Permissions should include "Store unlimited amount of client-side data"
+**Check Permissions:** `chrome://extensions` → CRO Djinn → Details → Permissions should include "Store unlimited amount of client-side data"
 
 **Check Worker:** If using Web Workers, ensure storage calls are in main thread, not worker
 
