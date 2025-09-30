@@ -7,15 +7,47 @@ export interface RawPageData {
   fullTextContent: string;
   structuredContent: {
     headings: any[];
-    buttons: any[];
-    links: any[];
+    interactiveElements: InteractiveElement[];
     forms: any[];
     images: any[];
     lists: any[];
+    videos: any[];
+    interactive: any[];
     sections: any[];
   };
   pageMetadata: any;
   timestamp: number;
+}
+
+// Unified interactive element type
+export interface InteractiveElement {
+  text: string;
+  elementType: 'button' | 'link';
+  tag: string;
+  href: string | null;
+  type: string | null;
+  position: {
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  };
+  styles: {
+    backgroundColor: string;
+    color: string;
+    fontSize: string;
+    fontWeight: string;
+    textDecoration: string;
+    display: string;
+  };
+  attributes: {
+    class: string;
+    id: string;
+    target: string | null;
+    ariaLabel: string | null;
+  };
+  isAboveFold: boolean;
+  index: number;
 }
 
 // Legacy interface - keeping for backwards compatibility during transition

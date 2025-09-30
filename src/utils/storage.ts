@@ -210,12 +210,13 @@ export class StorageManager {
       optimized.structuredContent = {
         ...optimized.structuredContent,
         headings: optimized.structuredContent.headings?.slice(0, 50) || [],
-        buttons: optimized.structuredContent.buttons?.slice(0, 30) || [],
-        links: optimized.structuredContent.links?.slice(0, 100) || [],
+        interactiveElements: optimized.structuredContent.interactiveElements?.slice(0, 200) || [],
         forms: optimized.structuredContent.forms?.slice(0, 10) || [],
         images: optimized.structuredContent.images?.slice(0, 50) || [],
         lists: optimized.structuredContent.lists?.slice(0, 20) || [],
-        sections: optimized.structuredContent.sections?.slice(0, 30) || []
+        sections: optimized.structuredContent.sections?.slice(0, 30) || [],
+        videos: optimized.structuredContent.videos || [],
+        interactive: optimized.structuredContent.interactive || []
       };
     }
     

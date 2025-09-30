@@ -98,23 +98,22 @@ ${rawData.fullTextContent}
 CONTENT HIERARCHY:
 ${rawData.structuredContent.headings.map((h: any, i: number) => {
   const position = h.position || { top: 0 };
-  const placement = position.top < 600 ? 'Above fold' : position.top < 1200 ? 'Mid-page' : 'Below fold';
+  const foldHeight = rawData.pageMetadata.viewport.height || 800;
+  const placement = position.top < foldHeight ? 'Above fold' : position.top < foldHeight * 2 ? 'Mid-page' : 'Below fold';
   return `${h.tag.toUpperCase()}: "${h.text}" (${placement})`;
 }).join('\n')}
 
-KEY CTAs & BUTTONS:
-${rawData.structuredContent.buttons.map((b: any, i: number) => {
-  const position = b.position || { top: 0 };
-  const placement = position.top < 600 ? 'Above fold' : position.top < 1200 ? 'Mid-page' : 'Below fold';
-  const hasGoodContrast = b.styles?.backgroundColor && b.styles?.backgroundColor !== 'transparent' && b.styles?.backgroundColor !== 'rgba(0, 0, 0, 0)';
-  return `${b.tag.toUpperCase()}: "${b.text}" (${placement}${hasGoodContrast ? ', Good contrast' : ', Low contrast'})`;
+INTERACTIVE ELEMENTS (Buttons, CTAs, Links):
+${rawData.structuredContent.interactiveElements.map((elem: any) => {
+  const placement = elem.isAboveFold ? 'Above fold' : 'Below fold';
+  const area = elem.position.width * elem.position.height;
+  const prominence = area > 8000 ? 'Large' : area > 3000 ? 'Medium' : 'Small';
+  const type = elem.elementType === 'button' ? 'BUTTON' : 'LINK';
+  return `${type} (${prominence}, ${placement}): "${elem.text}"${elem.href ? ` -> ${elem.href}` : ''}`;
 }).join('\n')}
 
 CONVERSION FORMS:
 ${rawData.structuredContent.forms.length > 0 ? rawData.structuredContent.forms.map((f: any, i: number) => `Form ${i+1}: ${f.totalFields} fields (${f.requiredFields} required), Action: "${f.action}"`).join('\n') : 'NO FORMS DETECTED'}
-
-MAIN NAVIGATION & LINKS:
-${rawData.structuredContent.links.slice(0, 10).map((l: any, i: number) => `"${l.text}" -> ${l.href}`).join('\n')}
 
 CONTENT STRUCTURE:
 ${rawData.structuredContent.lists.map((l: any, i: number) => `${l.tag.toUpperCase()}: ${l.itemCount} items`).join('\n')}

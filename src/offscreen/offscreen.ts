@@ -223,29 +223,48 @@ ${rawData.fullTextContent}
 CONTENT HIERARCHY:
 ${rawData.structuredContent.headings.map((h: any) => {
   const position = h.position || { top: 0 };
-  const placement = position.top < 600 ? 'Above fold' : position.top < 1200 ? 'Mid-page' : 'Below fold';
+  const foldHeight = rawData.pageMetadata.viewport.height || 800;
+  const placement = position.top < foldHeight ? 'Above fold' : position.top < foldHeight * 2 ? 'Mid-page' : 'Below fold';
   return `${h.tag.toUpperCase()}: "${h.text}" (${placement})`;
 }).join('\n')}
 
-KEY CTAs & BUTTONS:
-${rawData.structuredContent.buttons.map((b: any) => {
-  const position = b.position || { top: 0 };
-  const placement = position.top < 600 ? 'Above fold' : position.top < 1200 ? 'Mid-page' : 'Below fold';
-  const hasGoodContrast = b.styles?.backgroundColor && b.styles?.backgroundColor !== 'transparent' && b.styles?.backgroundColor !== 'rgba(0, 0, 0, 0)';
-  return `${b.tag.toUpperCase()}: "${b.text}" (${placement}${hasGoodContrast ? ', Good contrast' : ', Low contrast'})`;
+INTERACTIVE ELEMENTS (Buttons, CTAs, Links):
+${rawData.structuredContent.interactiveElements.map((elem: any) => {
+  const placement = elem.isAboveFold ? 'Above fold' : 'Below fold';
+  const area = elem.position.width * elem.position.height;
+  const prominence = area > 8000 ? 'Large' : area > 3000 ? 'Medium' : 'Small';
+  const type = elem.elementType === 'button' ? 'BUTTON' : 'LINK';
+  return `${type} (${prominence}, ${placement}): "${elem.text}"${elem.href ? ` -> ${elem.href}` : ''}`;
 }).join('\n')}
 
+${rawData.structuredContent?.forms?.length > 0 ? `
 CONVERSION FORMS:
-${rawData.structuredContent?.forms?.length > 0 ? rawData.structuredContent.forms.map((f: any, i: number) => `Form ${i+1}: ${f.totalFields || 0} fields (${f.requiredFields || 0} required), Action: "${f.action || 'No action'}"`).join('\n') : 'NO FORMS DETECTED'}
+${rawData.structuredContent.forms.map((f: any, i: number) => `Form ${i+1}: ${f.totalFields || 0} fields (${f.requiredFields || 0} required), Action: "${f.action || 'No action'}"`).join('\n')}` : ''}
 
-MAIN NAVIGATION & LINKS:
-${rawData.structuredContent?.links?.slice(0, 10).map((l: any) => `"${l.text || 'No text'}" -> ${l.href || '#'}`).join('\n') || 'NO NAVIGATION LINKS'}
+${rawData.structuredContent?.lists?.length > 0 ? `
+CONTENT LISTS:
+${rawData.structuredContent.lists.map((l: any) => `${l.tag?.toUpperCase() || 'UNKNOWN'}: ${l.itemCount || 0} items`).join('\n')}` : ''}
 
-KEY CONVERSION ELEMENTS (For Customer Journey Mapping):
-MAIN CTAs: ${rawData.structuredContent?.buttons?.filter((b: any) => b.text && b.text.trim()).map((b: any) => `"${b.text}"`).join(', ') || 'NO CTAs FOUND'}
-
-CONTENT STRUCTURE:
-${rawData.structuredContent?.lists?.map((l: any) => `${l.tag?.toUpperCase() || 'UNKNOWN'}: ${l.itemCount || 0} items`).join('\n') || 'NO CONTENT LISTS'}
+${(rawData.structuredContent?.videos?.length > 0 || rawData.structuredContent?.images?.filter((i: any) => i.isAnimated).length > 0) ? `
+MEDIA ELEMENTS:
+${rawData.structuredContent?.videos?.length > 0 ? rawData.structuredContent.videos.map((v: any) => {
+  const platform = v.src.includes('youtube') ? 'YouTube' : 
+                   v.src.includes('vimeo') ? 'Vimeo' : 
+                   v.src.includes('wistia') ? 'Wistia' : 
+                   v.src.includes('loom') ? 'Loom' :
+                   v.type === 'video' ? 'Native Video' : 'Video';
+  const attributes = [
+    v.autoplay ? 'autoplay' : '',
+    v.muted ? 'muted' : '',
+    v.controls ? 'has-controls' : 'no-controls',
+    v.loop ? 'looping' : ''
+  ].filter(Boolean).join(', ');
+  
+  return `${v.type?.toUpperCase()}: ${platform} (${attributes}) - ${v.width}x${v.height}px - ${v.parentSection || 'Unknown section'}`;
+}).join('\n') : ''}${rawData.structuredContent?.videos?.length > 0 && rawData.structuredContent?.images?.filter((i: any) => i.isAnimated).length > 0 ? '\n' : ''}${rawData.structuredContent?.images?.filter((i: any) => i.isAnimated).length > 0 ? `Animated Images (GIFs): ${rawData.structuredContent.images.filter((i: any) => i.isAnimated).map((img: any) => img.parentSection || 'Unknown').join(', ')}` : ''}` : ''}
+${rawData.structuredContent?.interactive?.length > 0 ? `
+INTERACTIVE ELEMENTS:
+${rawData.structuredContent.interactive.map((elem: any) => `${elem.type?.toUpperCase() || 'CAROUSEL'}: ${elem.itemCount || 0} items${elem.hasControls ? ' (Has navigation)' : ''}${elem.hasDots ? ' (Has dots)' : ''} - ${elem.parentSection || 'Unknown section'}`).join('\n')}` : ''}
 
 PAGE FLOW:
 ${rawData.structuredContent?.sections?.slice(0, 8).map((s: any, i: number) => `Section ${i+1}: "${s.textPreview?.substring(0, 80) || 'No preview'}..."`).join('\n') || 'NO PAGE SECTIONS'}
@@ -257,13 +276,25 @@ You have access to ${screenshots.length} sequential screenshots of the complete 
 - Design consistency across sections
 - Mobile responsiveness
 - Color scheme effectiveness
-- Overall visual polish and trust signals` : screenshots.length === 1 ? `=== VISUAL ANALYSIS ===
+- Overall visual polish and trust signals
+
+IMPORTANT: When analyzing videos, carousels, and interactive elements:
+- Native video players may show a poster frame or first frame - this does NOT mean they're broken
+- Videos with visible controls or play buttons are functional
+- Carousels may appear static in screenshots but are functional if navigation controls are present
+- Animated GIFs may appear as static images in screenshots but are functional on the live page` : screenshots.length === 1 ? `=== VISUAL ANALYSIS ===
 You have access to a screenshot of the page. Use this to analyze:
 - Visual hierarchy and user flow
 - CTA prominence and placement
 - Design quality and trust signals
 - Color scheme effectiveness
-- Overall visual polish` : ''}
+- Overall visual polish
+
+IMPORTANT: When analyzing videos, carousels, and interactive elements:
+- Native video players may show a poster frame or first frame - this does NOT mean they're broken
+- Videos with visible controls or play buttons are functional
+- Carousels may appear static in screenshots but are functional if navigation controls are present
+- Animated GIFs may appear as static images in screenshots but are functional on the live page` : ''}
 
 === ANALYSIS REQUIREMENTS ===
 
@@ -274,6 +305,17 @@ CRITICAL REQUIREMENTS:
 - If no forms exist, omit the forms section entirely
 - Each recommendation should be distinct and non-overlapping
 - Do NOT use em Dashes in the analysis
+
+INTERACTIVE ELEMENT ANALYSIS:
+- You are receiving ALL interactive elements (buttons and links) without pre-filtering
+- Use the full page context, element size, position, and styling to determine:
+  * Which are primary CTAs (likely large buttons above fold with action-oriented copy)
+  * Which are secondary CTAs (smaller, less prominent, or below fold)
+  * Which are navigation elements (links in header/footer, standard nav patterns)
+  * Which are trust signals (Contact, About, Support in appropriate contexts)
+  * Which are social proof (social media links, review platform links)
+- Consider the business type and page type when classifying element importance
+- Don't assume footer links are unimportant - they may be critical trust signals or conversion paths
 
 ANALYSIS STRUCTURE:
 
@@ -290,23 +332,24 @@ ANALYSIS STRUCTURE:
    - Detailed customer journey analysis: Start with how customers arrive at this page, then map each step they take through the page content toward conversion, including decision points and potential drop-off areas
    - Top 3 strengths and top 3 weaknesses
 
-3. **ACTIONABLE RECOMMENDATIONS** 
+3. **VISUAL CRO ANALYSIS** (For Visual Analysis Only)
+   As a $10,000/day CRO auditor, provide dedicated visual conversion analysis:
+   - VISUAL FLOW ANALYSIS: How does the eye naturally flow through the page? Do colors and content hierarchy guide users toward CTAs? Are there visual distractions that pull attention away from conversion goals?
+   - COLOR & CONTRAST EVALUATION: How effective are the color choices for conversion? Is there sufficient contrast for readability and CTA prominence? Do colors create the right emotional response for the target audience?
+   - CRITICAL VISUAL ISSUE: What's the single biggest visual problem preventing conversions? Focus on business impact and user behavior. Provide clear, non-technical solutions that marketers and executives can understand and implement. Avoid technical details like hex codes, pixel measurements, or CSS specifications. Instead, describe the problem in terms of user experience and business outcomes, then provide simple, actionable solutions that can be communicated to designers and developers.
+
+4. **ACTIONABLE RECOMMENDATIONS** 
    - 5-7 prioritized, industry-specific recommendations with detailed step-by-step implementation
    - Each recommendation MUST include an "implementation" array with 3-5 specific, actionable steps
    - Psychological principles behind each recommendation (adapted for purchase behavior type)
    - Effort level and timeline for each
    - Industry-specific best practices and benchmarks
    - Compelling emotionally & logically charged copy suggestions
+   - Use insights from Visual CRO Analysis to inform these recommendations
 
-4. **QUICK WINS**
+5. **QUICK WINS**
    - 3-5 high-impact, low-effort improvements that can be done immediately
    - Tailored to the specific page type and business model
-
-5. **VISUAL CRO ANALYSIS** (For Visual Analysis Only)
-   As a $10,000/day CRO auditor, provide dedicated visual conversion analysis:
-   - VISUAL FLOW ANALYSIS: How does the eye naturally flow through the page? Do colors and content hierarchy guide users toward CTAs? Are there visual distractions that pull attention away from conversion goals?
-   - COLOR & CONTRAST EVALUATION: How effective are the color choices for conversion? Is there sufficient contrast for readability and CTA prominence? Do colors create the right emotional response for the target audience?
-   - CRITICAL VISUAL ISSUE: What's the single biggest visual problem preventing conversions? Focus on business impact and user behavior. Provide clear, non-technical solutions that marketers and executives can understand and implement. Avoid technical details like hex codes, pixel measurements, or CSS specifications. Instead, describe the problem in terms of user experience and business outcomes, then provide simple, actionable solutions that can be communicated to designers and developers.
 
 CRITICAL: Each recommendation MUST include a detailed "implementation" array with step-by-step instructions.
 
@@ -333,6 +376,26 @@ Return analysis as JSON with this ENHANCED structure:
     ],
     "keyStrengths": ["Clear pricing tiers", "Industry-standard features", "Professional design"],
     "criticalWeaknesses": ["Weak social proof for enterprise segment", "No risk mitigation messaging", "Missing implementation support details"]
+  },
+  "visualCROAnalysis": {
+    "visualFlow": {
+      "eyeFlowPath": "Hero → Value Prop → Social Proof → CTA",
+      "flowScore": 7,
+      "guidesToCTA": true,
+      "distractions": ["Competing CTAs in sidebar", "Too many color variations"]
+    },
+    "colorContrast": {
+      "ctaContrast": "Excellent - 4.8:1 ratio",
+      "readability": "Good overall", 
+      "emotionalResponse": "Trust-building blues with conversion-optimized orange CTAs",
+      "contrastScore": 8
+    },
+    "criticalIssue": {
+      "problem": "Primary CTA blends with background reducing click-through rates",
+      "solution": "Make the main call-to-action button stand out with a contrasting color that draws attention. Use a bright, action-oriented color that creates visual separation from the background. Ensure the button text is clearly readable and the overall design encourages clicks.",
+      "impact": "High - likely 15-20% conversion increase",
+      "urgency": "Critical"
+    }
   },
   "recommendations": [
     {
@@ -362,26 +425,6 @@ Return analysis as JSON with this ENHANCED structure:
       "timeline": "Same day"
     }
   ],
-  "visualCROAnalysis": {
-    "visualFlow": {
-      "eyeFlowPath": "Hero → Value Prop → Social Proof → CTA",
-      "flowScore": 7,
-      "guidesToCTA": true,
-      "distractions": ["Competing CTAs in sidebar", "Too many color variations"]
-    },
-    "colorContrast": {
-      "ctaContrast": "Excellent - 4.8:1 ratio",
-      "readability": "Good overall", 
-      "emotionalResponse": "Trust-building blues with conversion-optimized orange CTAs",
-      "contrastScore": 8
-    },
-    "criticalIssue": {
-      "problem": "Primary CTA blends with background reducing click-through rates",
-      "solution": "Make the main call-to-action button stand out with a contrasting color that draws attention. Use a bright, action-oriented color that creates visual separation from the background. Ensure the button text is clearly readable and the overall design encourages clicks.",
-      "impact": "High - likely 15-20% conversion increase",
-      "urgency": "Critical"
-    }
-  },
   "executiveSummary": [
     "Context: B2B SaaS pricing page for high-consideration software purchase requiring trust and risk mitigation",
     "Key insight: Missing critical trust signals and implementation clarity needed for enterprise buyers",
@@ -786,51 +829,19 @@ function cleanFilteredStructuredContent(structuredContent: any): any {
   
   return {
     ...structuredContent,
-    // Filter buttons to remove empty/tracking ones
-    buttons: structuredContent.buttons?.filter((button: any) => {
-      if (!button.text || typeof button.text !== 'string' || button.text.trim() === '') return false;
-      
-      const lowerText = button.text.toLowerCase();
-      const skipPatterns = [
-        'accept all', 'manage consent', 'cookie settings', 'privacy settings',
-        'opt out', 'confirm my choices', 'back button', 'apply', 'cancel'
-      ];
-      
-      return !skipPatterns.some((pattern: string) => lowerText.includes(pattern));
-    }) || [],
-    
-    // Filter links to remove footer/legal ones
-    links: structuredContent.links?.filter((link: any) => {
-      if (!link.text || typeof link.text !== 'string' || link.text.trim() === '') return false;
-      
-      const lowerText = link.text.toLowerCase();
-      const lowerHref = (typeof link.href === 'string' ? link.href : '').toLowerCase();
-      
-      const skipPatterns = [
-        'privacy policy', 'terms of use', 'terms of service', 'cookie policy',
-        'careers', 'contact us', 'about us', 'home', 'support', 'help',
-        'copyright', '©', 'powered by', 'email us', 'phone:', 'fax:',
-        'linkedin', 'twitter', 'facebook', 'youtube', 'instagram',
-        'skip to', 'log in', 'login'
-      ];
-      
-      if (skipPatterns.some((pattern: string) => lowerText.includes(pattern) || lowerHref.includes(pattern))) {
-        return false;
-      }
-      
-      if (lowerText.includes('skip to') || link.href?.startsWith('#')) {
-        return false;
-      }
-      
-      return true;
-    }).slice(0, 10) || [],
+    // No more filtering of interactive elements - they're already properly filtered by scraper
+    interactiveElements: structuredContent.interactiveElements || [],
     
     // Clean sections to remove CSS classes
     sections: structuredContent.sections?.map((section: any) => ({
       ...section,
       class: cleanClassName(section.class),
       textPreview: cleanSectionText(section.textPreview)
-    })) || []
+    })) || [],
+    
+    // Pass through everything else unchanged
+    videos: structuredContent.videos || [],
+    interactive: structuredContent.interactive || []
   };
 }
 

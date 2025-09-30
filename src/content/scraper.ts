@@ -102,19 +102,21 @@ export class PageScraper {
 
   private extractStructuredContent(): any {
     const headings = this.getHeadings();
-    const buttons = this.getButtons();
-    const links = this.getLinks();
+    const interactiveElements = this.getInteractiveElements();
     const forms = this.getForms();
     const images = this.getImages();
     const lists = this.getLists();
+    const videos = this.getVideos();
+    const interactive = this.getInteractiveWidgets();
 
     return {
       headings,
-      buttons,
-      links,
+      interactiveElements,
       forms,
       images,
       lists,
+      videos,
+      interactive,
       sections: this.getSections()
     };
   }
@@ -144,79 +146,80 @@ export class PageScraper {
     return headings;
   }
 
-  private getButtons(): any[] {
-    const buttons: any[] = [];
-    const buttonElements = document.querySelectorAll('button, input[type="submit"], input[type="button"], [role="button"], a');
+  private getInteractiveElements(): any[] {
+    const elements: any[] = [];
     
-    buttonElements.forEach((button, index) => {
-      const text = button.textContent?.trim() || (button as HTMLInputElement).value || '';
+    // Query all potentially interactive elements
+    const selector = [
+      'button',
+      'input[type="submit"]',
+      'input[type="button"]',
+      '[role="button"]',
+      'a[href]'
+    ].join(', ');
+    
+    const interactiveElements = document.querySelectorAll(selector);
+    
+    interactiveElements.forEach((elem, index) => {
+      const text = elem.textContent?.trim() || (elem as HTMLInputElement).value || '';
       
-      // Filter out empty buttons, tracking elements, and meaningless buttons
-      if (!text || !this.isVisible(button) || this.isTrackingElement(button) || !this.isMeaningfulButton(text)) {
-        return;
+      // MINIMAL FILTERING: Only remove genuinely irrelevant noise
+      if (!text || !this.isVisible(elem)) {
+        return; // Skip empty or invisible
       }
       
-      const rect = button.getBoundingClientRect();
-      const styles = window.getComputedStyle(button);
-      const topPosition = Math.round(rect.top + window.scrollY);
+      if (this.isTrackingElement(elem)) {
+        return; // Skip analytics/tracking
+      }
       
-      // Simple contrast check - does it have meaningful background color?
-      const hasGoodContrast = styles.backgroundColor && 
-                             styles.backgroundColor !== 'transparent' && 
-                             styles.backgroundColor !== 'rgba(0, 0, 0, 0)';
+      if (this.isCookieConsentElement(text)) {
+        return; // Skip cookie banners
+      }
       
-      buttons.push({
+      // Get comprehensive visual context
+      const rect = elem.getBoundingClientRect();
+      const styles = window.getComputedStyle(elem);
+      const tag = elem.tagName.toLowerCase();
+      
+      // Determine element type
+      const isButton = tag === 'button' || 
+                       (elem as HTMLElement).getAttribute('role') === 'button' ||
+                       (tag === 'input' && ['submit', 'button'].includes((elem as HTMLInputElement).type));
+      const isLink = tag === 'a';
+      
+      elements.push({
         text,
-        tag: button.tagName?.toLowerCase() || '',
-        type: (button as HTMLInputElement).type || 'button',
-        visible: this.isVisible(button),
+        elementType: isButton ? 'button' : 'link',
+        tag,
+        href: (elem as HTMLAnchorElement).href || null,
+        type: (elem as HTMLInputElement).type || null,
         position: {
-          top: topPosition
+          top: Math.round(rect.top + window.scrollY),
+          left: Math.round(rect.left + window.scrollX),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height)
         },
         styles: {
-          backgroundColor: styles.backgroundColor || 'transparent'
+          backgroundColor: styles.backgroundColor,
+          color: styles.color,
+          fontSize: styles.fontSize,
+          fontWeight: styles.fontWeight,
+          textDecoration: styles.textDecoration,
+          display: styles.display
         },
         attributes: {
-          href: (button as HTMLAnchorElement).href || null
+          class: elem.className,
+          id: elem.id,
+          target: (elem as HTMLAnchorElement).target || null,
+          ariaLabel: elem.getAttribute('aria-label')
         },
+        isAboveFold: rect.top + window.scrollY < window.innerHeight,
         index
       });
     });
-
-    return buttons;
-  }
-
-  private getLinks(): any[] {
-    const links: any[] = [];
-    const linkElements = document.querySelectorAll('a[href]');
     
-    linkElements.forEach((link, index) => {
-      const text = link.textContent?.trim();
-      const href = (link as HTMLAnchorElement).href;
-      
-      // Filter out meaningless links and tracking elements
-      if (!text || !this.isVisible(link) || this.isTrackingElement(link) || !this.isMeaningfulLink(text, href)) {
-        return;
-      }
-      
-      const rect = link.getBoundingClientRect();
-      const styles = window.getComputedStyle(link);
-      
-      links.push({
-        text,
-        href,
-        visible: this.isVisible(link),
-        textDecoration: styles.textDecoration,
-        attributes: {
-          class: this.cleanClassName(link.className),
-          id: link.id,
-          target: (link as HTMLAnchorElement).target
-        },
-        index
-      });
-    });
-
-    return links.slice(0, 15); // Limit to most important links
+    // Return ALL elements, no arbitrary limits
+    return elements;
   }
 
   private getForms(): any[] {
@@ -262,12 +265,89 @@ export class PageScraper {
           alt: img.alt || '',
           title: img.title || '',
           hasSize: !!(img.naturalWidth && img.naturalHeight),
+          isAnimated: img.src.toLowerCase().includes('.gif') || 
+                      img.src.toLowerCase().includes('giphy') ||
+                      img.closest('[class*="anim"]') !== null,
+          parentSection: this.getParentSectionIdentifier(img),
           index
         });
       }
     });
 
     return images;
+  }
+
+  private getVideos(): any[] {
+    const videos: any[] = [];
+    const videoElements = document.querySelectorAll('video, iframe[src*="youtube"], iframe[src*="vimeo"], iframe[src*="wistia"], iframe[src*="loom"]');
+    
+    videoElements.forEach((video, index) => {
+      if (this.isVisible(video)) {
+        const isNativeVideo = video.tagName.toLowerCase() === 'video';
+        const rect = video.getBoundingClientRect();
+        
+        videos.push({
+          type: video.tagName.toLowerCase(),
+          src: (video as HTMLVideoElement).src || (video as HTMLIFrameElement).src || '',
+          autoplay: video.hasAttribute('autoplay'),
+          muted: video.hasAttribute('muted'),
+          controls: isNativeVideo ? video.hasAttribute('controls') : true, // iframes assumed to have controls
+          loop: video.hasAttribute('loop'),
+          poster: isNativeVideo ? (video as HTMLVideoElement).poster : null,
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+          parentSection: this.getParentSectionIdentifier(video),
+          index
+        });
+      }
+    });
+    
+    return videos;
+  }
+
+  private getInteractiveWidgets(): any[] {
+    const interactive: any[] = [];
+    
+    // Detect carousels/sliders by common patterns
+    const carouselElements = document.querySelectorAll(
+      '[class*="carousel"], [class*="slider"], [class*="swiper"], ' +
+      '[class*="slide-show"], [data-carousel], [data-slider], ' +
+      '[class*="glide"], [class*="splide"], [class*="slick"]'
+    );
+    
+    carouselElements.forEach((elem, index) => {
+      if (this.isVisible(elem)) {
+        const itemCount = elem.querySelectorAll('[class*="slide"], [class*="item"], [class*="card"]').length;
+        
+        if (itemCount > 1) { // Only count real carousels
+          interactive.push({
+            type: 'carousel',
+            itemCount,
+            hasControls: !!(elem.querySelector('[class*="prev"], [class*="next"], [class*="arrow"]')),
+            hasDots: !!(elem.querySelector('[class*="dot"], [class*="pagination"]')),
+            parentSection: this.getParentSectionIdentifier(elem),
+            index
+          });
+        }
+      }
+    });
+    
+    return interactive;
+  }
+
+  private getParentSectionIdentifier(element: Element): string {
+    // Find parent section/container
+    const section = element.closest('section, article, main, [class*="section"]');
+    if (!section) return 'header';
+    
+    // Create simple identifier
+    const sectionIndex = Array.from(document.querySelectorAll('section, article, main, [class*="section"]'))
+      .indexOf(section);
+    
+    const headingInSection = section.querySelector('h1, h2, h3');
+    const headingText = headingInSection?.textContent?.trim().substring(0, 30) || '';
+    
+    return headingText ? `Section ${sectionIndex + 1}: ${headingText}` : `Section ${sectionIndex + 1}`;
   }
 
   private getLists(): any[] {
@@ -316,6 +396,9 @@ export class PageScraper {
 
   private getPageMetadata(): any {
     const viewport = {
+      width: window.innerWidth,
+      height: window.innerHeight,
+      scrollHeight: document.documentElement.scrollHeight,
       isMobile: window.innerWidth < 768,
       hasVerticalScroll: document.documentElement.scrollHeight > window.innerHeight
     };
@@ -408,73 +491,30 @@ export class PageScraper {
     return trackingKeywords.some(keyword => lowerText.includes(keyword));
   }
 
-  private isMeaningfulButton(text: string): boolean {
-    // Filter out empty or meaningless button text
-    if (!text || typeof text !== 'string' || text.length === 0) return false;
-    
-    // Skip cookie/consent buttons (not relevant for CRO)
-    const skipPatterns = [
-      'accept all', 'manage consent', 'cookie settings', 'privacy settings',
-      'opt out', 'confirm my choices'
-    ];
+  private isCookieConsentElement(text: string): boolean {
+    if (!text || typeof text !== 'string') return false;
     
     const lowerText = text.toLowerCase();
-    return !skipPatterns.some(pattern => lowerText.includes(pattern));
-  }
-
-  private isMeaningfulLink(text: string, href: string): boolean {
-    if (!text || typeof text !== 'string' || text.length === 0) return false;
-    if (typeof href !== 'string') return false;
     
-    const lowerText = text.toLowerCase();
-    const lowerHref = href.toLowerCase();
-    
-    // Skip footer/legal links (not relevant for CRO analysis)
-    const skipPatterns = [
-      'privacy policy', 'terms of use', 'terms of service', 'cookie policy',
-      'careers', 'contact us', 'about us', 'home', 'support', 'help',
-      'copyright', '©', 'powered by', 'email us', 'phone:', 'fax:',
-      'linkedin', 'twitter', 'facebook', 'youtube', 'instagram'
+    // Only filter EXACT cookie consent patterns
+    const cookiePatterns = [
+      'accept all cookies',
+      'accept cookies',
+      'manage cookies',
+      'cookie preferences',
+      'manage consent',
+      'cookie settings',
+      'privacy settings',
+      'opt out of cookies',
+      'confirm my choices',
+      'reject all cookies'
     ];
     
-    // Skip if it's a footer/legal type link
-    if (skipPatterns.some(pattern => lowerText.includes(pattern) || lowerHref.includes(pattern))) {
-      return false;
-    }
-    
-    // Skip if it's an anchor link or skip-to-content link
-    if (lowerText.includes('skip to') || href.startsWith('#')) {
-      return false;
-    }
-    
-    return true;
-  }
-
-  private cleanClassName(className: string): string {
-    if (!className) return '';
-    
-    // Remove generated class names but keep meaningful ones
-    const classes = className.split(' ').filter(cls => {
-      // Remove UUID-like class names
-      if (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(cls)) {
-        return false;
-      }
-      
-      // Remove generated section/module class names
-      if (/^(section|module|component)[a-f0-9]+$/i.test(cls)) {
-        return false;
-      }
-      
-      // Keep meaningful class names
-      const meaningfulPatterns = [
-        'btn', 'button', 'cta', 'primary', 'secondary', 'header', 'footer',
-        'nav', 'menu', 'form', 'input', 'submit', 'link'
-      ];
-      
-      return meaningfulPatterns.some(pattern => cls && typeof cls === 'string' && cls.toLowerCase().includes(pattern));
+    // Must be exact or very close match (not just contain the word "cookie")
+    return cookiePatterns.some(pattern => {
+      return lowerText === pattern || 
+             (lowerText.length < 30 && lowerText.includes(pattern));
     });
-    
-    return classes.join(' ');
   }
 
   private cleanContent(content: string): string {
