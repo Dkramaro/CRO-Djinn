@@ -66,7 +66,7 @@ export class ScreenshotCapture {
 
       console.log('Starting full page capture for tab:', tabId);
 
-      // Get accurate page dimensions with better detection and scroll preparation
+      // Get accurate page dimensions with persistent header detection
       const pageInfo = await chrome.scripting.executeScript({
         target: { tabId },
         func: () => {
@@ -75,6 +75,76 @@ export class ScreenshotCapture {
           
           // Get viewport height
           const vh = window.innerHeight;
+          
+          // Detect persistent headers that reduce visible content area
+          const detectPersistentHeaders = () => {
+            const fixedElements: Array<{element: Element, height: number, top: number}> = [];
+            
+            // Find elements with fixed or sticky positioning
+            const allElements = document.querySelectorAll('*');
+            
+            for (const element of allElements) {
+              const style = window.getComputedStyle(element);
+              const position = style.position;
+              
+              // Check for fixed or sticky positioning
+              if (position === 'fixed' || position === 'sticky') {
+                const rect = element.getBoundingClientRect();
+                const height = rect.height;
+                const top = rect.top;
+                
+                // Only consider elements that are:
+                // 1. Actually visible (height > 0)
+                // 2. At the top of the viewport (top <= 50px from top)
+                // 3. Have meaningful height (at least 20px)
+                if (height > 20 && top <= 50 && rect.bottom > 0) {
+                  fixedElements.push({ element, height, top });
+                }
+              }
+            }
+            
+            // Sort by top position and height to find the most prominent header
+            fixedElements.sort((a, b) => {
+              if (Math.abs(a.top - b.top) < 10) {
+                // If at similar top positions, prefer taller elements
+                return b.height - a.height;
+              }
+              return a.top - b.top;
+            });
+            
+            // Calculate total header height
+            let totalHeaderHeight = 0;
+            let lastBottom = 0;
+            
+            for (const fixed of fixedElements) {
+              const rect = fixed.element.getBoundingClientRect();
+              
+              // Only count if this element doesn't overlap significantly with previous ones
+              if (rect.top >= lastBottom - 10) {
+                totalHeaderHeight += rect.height;
+                lastBottom = rect.bottom;
+              }
+            }
+            
+            return {
+              totalHeaderHeight: Math.min(totalHeaderHeight, vh * 0.3), // Cap at 30% of viewport
+              headerElements: fixedElements.length,
+              detectedHeaders: fixedElements.map(f => ({
+                tag: f.element.tagName,
+                height: f.height,
+                top: f.top,
+                className: f.element.className
+              }))
+            };
+          };
+          
+          const headerInfo = detectPersistentHeaders();
+          
+          // Calculate usable viewport height (excluding persistent headers)
+          const usableViewportHeight = Math.max(
+            vh - headerInfo.totalHeaderHeight,
+            vh * 0.7 // Ensure we don't go below 70% of viewport
+          );
           
           // Get total page height using multiple methods for accuracy
           const bodyScrollHeight = document.body.scrollHeight || 0;
@@ -95,8 +165,12 @@ export class ScreenshotCapture {
             }, 0)
           );
 
-          console.log('Page dimension analysis:', {
+          console.log('Page dimension analysis with header detection:', {
             viewport: vh,
+            headerHeight: headerInfo.totalHeaderHeight,
+            usableViewport: usableViewportHeight,
+            headerElements: headerInfo.headerElements,
+            detectedHeaders: headerInfo.detectedHeaders,
             bodyScrollHeight,
             bodyOffsetHeight,
             docScrollHeight,
@@ -111,7 +185,9 @@ export class ScreenshotCapture {
 
           return {
             viewportHeight: vh,
+            usableViewportHeight: usableViewportHeight,
             totalHeight: th,
+            headerInfo: headerInfo,
             originalBehavior: originalBehavior
           };
         }
@@ -121,17 +197,25 @@ export class ScreenshotCapture {
         throw new Error('Cannot get page dimensions');
       }
 
-      const { viewportHeight, totalHeight } = pageInfo[0].result;
+      const { viewportHeight, usableViewportHeight, totalHeight, headerInfo } = pageInfo[0].result;
       
-      console.log('Page info:', { viewportHeight, totalHeight });
+      console.log('Page info with header detection:', { 
+        viewportHeight, 
+        usableViewportHeight, 
+        totalHeight, 
+        headerInfo 
+      });
 
-      // Calculate screenshots needed
+      // Use usable viewport height for calculations to avoid content loss
+      const effectiveViewportHeight = usableViewportHeight;
+
+      // Calculate screenshots needed using effective viewport height
       const screenshotsNeeded = Math.min(
-        Math.ceil(totalHeight / viewportHeight),
+        Math.ceil(totalHeight / effectiveViewportHeight),
         maxScreenshots
       );
 
-      console.log('Screenshots needed:', screenshotsNeeded);
+      console.log('Screenshots needed with header compensation:', screenshotsNeeded);
 
       const screenshots: string[] = [];
       let totalSize = 0;
@@ -153,20 +237,21 @@ export class ScreenshotCapture {
         progressCallback?.(i + 1, screenshotsNeeded);
 
         // Calculate scroll position with slight overlap to ensure continuity
+        // Use effective viewport height to account for persistent headers
         const overlapPixels = 50; // 50px overlap to ensure smooth transitions
         let scrollTop = 0;
         
         if (i === 0) {
           scrollTop = 0; // First screenshot starts at the very top
         } else {
-          scrollTop = (i * viewportHeight) - overlapPixels;
+          scrollTop = (i * effectiveViewportHeight) - overlapPixels;
         }
         
         // Ensure we don't scroll past the bottom
-        const maxScrollTop = Math.max(0, totalHeight - viewportHeight);
+        const maxScrollTop = Math.max(0, totalHeight - effectiveViewportHeight);
         scrollTop = Math.min(scrollTop, maxScrollTop);
 
-        console.log(`Positioning for screenshot ${i + 1}: scrollTop=${scrollTop}, viewportHeight=${viewportHeight}`);
+        console.log(`Positioning for screenshot ${i + 1}: scrollTop=${scrollTop}, effectiveViewportHeight=${effectiveViewportHeight}`);
 
         // Scroll to precise position and verify
         const scrollResult = await chrome.scripting.executeScript({
@@ -191,7 +276,7 @@ export class ScreenshotCapture {
               success: Math.abs(actualScrollTop - targetScrollY) < 10 // Allow 10px tolerance
             };
           },
-          args: [scrollTop, viewportHeight]
+          args: [scrollTop, effectiveViewportHeight]
         });
 
         const scrollVerification = scrollResult?.[0]?.result;
@@ -234,8 +319,8 @@ export class ScreenshotCapture {
 
         // Check if we've captured the full page (with some tolerance)
         const currentScrollTop = scrollVerification?.actualScrollTop || scrollTop;
-        const remainingContent = totalHeight - (currentScrollTop + viewportHeight);
-        const remainingContentPercentage = remainingContent / viewportHeight;
+        const remainingContent = totalHeight - (currentScrollTop + effectiveViewportHeight);
+        const remainingContentPercentage = remainingContent / effectiveViewportHeight;
         
         console.log(`After screenshot ${i + 1}: scrollTop=${currentScrollTop}, remaining=${remainingContent}px (${Math.round(remainingContentPercentage * 100)}% of viewport)`);
         
@@ -271,7 +356,19 @@ export class ScreenshotCapture {
         }
       });
 
-      console.log(`Captured ${screenshots.length} screenshots, total size: ${Math.round(totalSize / 1024 / 1024)}MB`);
+      // Restore original scroll behavior
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        func: (originalBehavior) => {
+          if (originalBehavior) {
+            document.documentElement.style.scrollBehavior = originalBehavior;
+            document.body.style.scrollBehavior = originalBehavior;
+          }
+        },
+        args: [pageInfo[0].result.originalBehavior]
+      });
+
+      console.log(`Full page capture complete: ${screenshots.length} screenshots, total size: ${Math.round(totalSize / 1024 / 1024)}MB`);
 
       return {
         screenshots,
