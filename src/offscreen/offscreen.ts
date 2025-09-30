@@ -303,7 +303,7 @@ CRITICAL REQUIREMENTS:
 - NEVER include percentage improvement estimates or conversion lift numbers
 - Focus on unique, actionable insights - avoid repeating the same recommendations across sections
 - If no forms exist, omit the forms section entirely
-- Each recommendation should be distinct and non-overlapping
+- Each recommendation should be distinct and non-overlapping to avoid redundancy
 - Do NOT use em Dashes in the analysis
 
 INTERACTIVE ELEMENT ANALYSIS:
@@ -351,7 +351,10 @@ ANALYSIS STRUCTURE:
    - 3-5 high-impact, low-effort improvements that can be done immediately
    - Tailored to the specific page type and business model
 
-CRITICAL: Each recommendation MUST include a detailed "implementation" array with step-by-step instructions.
+
+CRITICAL: 
+- Each recommendation MUST include a detailed "implementation" array with step-by-step instructions.
+- You CANNOT include redundancies in the recommendations.
 
 Return analysis as JSON with this ENHANCED structure:
 {
