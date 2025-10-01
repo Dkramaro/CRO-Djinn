@@ -1,6 +1,7 @@
 import { StorageManager } from '../utils/storage';
 import { ConsentManager } from '../utils/consent';
 import { ExtensionSettings } from '../types';
+import { DEBUG, safeLog } from '../config/debug';
 
 class OptionsController {
   private form: HTMLFormElement | null = null;
@@ -148,7 +149,7 @@ class OptionsController {
       
       // Set full page screenshot setting
       if (this.fullPageScreenshotCheckbox) {
-        this.fullPageScreenshotCheckbox.checked = settings.fullPageScreenshot || false;
+        this.fullPageScreenshotCheckbox.checked = settings.fullPageScreenshot ?? true;
       }
 
       // Update UI based on provider
@@ -202,17 +203,10 @@ class OptionsController {
         fullPageScreenshot: this.fullPageScreenshotCheckbox?.checked || false
       };
 
-      console.log('🔧 Preparing to save settings:', {
-        provider: settings.provider,
-        preservingOpenaiKey: provider !== 'openai' && !!currentSettings.openaiApiKey,
-        preservingGeminiKey: provider !== 'gemini' && !!currentSettings.geminiApiKey,
-        openaiKeyLength: settings.openaiApiKey?.length || 0,
-        geminiKeyLength: settings.geminiApiKey?.length || 0,
-        openaiKeyType: typeof settings.openaiApiKey,
-        geminiKeyType: typeof settings.geminiApiKey,
-        openaiKeyPrefix: settings.openaiApiKey?.substring(0, 5) || 'empty',
-        geminiKeyPrefix: settings.geminiApiKey?.substring(0, 5) || 'empty'
-      });
+      if (DEBUG.STORAGE) {
+        console.log('🔧 Preparing to save settings');
+        safeLog.settings(settings);
+      }
 
       // Validate current provider's API key
       const currentApiKey = provider === 'openai' ? settings.openaiApiKey : settings.geminiApiKey;
@@ -397,17 +391,14 @@ class OptionsController {
       // Get decrypted settings
       const decryptedSettings = await StorageManager.getSettings();
       
-      console.log('Decrypted settings:', {
-        provider: decryptedSettings.provider,
-        hasOpenaiKey: !!decryptedSettings.openaiApiKey,
-        hasGeminiKey: !!decryptedSettings.geminiApiKey,
-        openaiKeyLength: decryptedSettings.openaiApiKey?.length || 0,
-        geminiKeyLength: decryptedSettings.geminiApiKey?.length || 0,
-        openaiKeyValid: this.isValidApiKey(decryptedSettings.openaiApiKey, 'openai'),
-        geminiKeyValid: this.isValidApiKey(decryptedSettings.geminiApiKey, 'gemini'),
-        openaiKeyPrefix: decryptedSettings.openaiApiKey?.substring(0, 5) || '',
-        geminiKeyPrefix: decryptedSettings.geminiApiKey?.substring(0, 5) || ''
-      });
+      if (DEBUG.STORAGE) {
+        console.log('Decrypted settings:');
+        safeLog.settings(decryptedSettings);
+        console.log('Validation:', {
+          openaiKeyValid: this.isValidApiKey(decryptedSettings.openaiApiKey, 'openai'),
+          geminiKeyValid: this.isValidApiKey(decryptedSettings.geminiApiKey, 'gemini')
+        });
+      }
 
       // Check validation
       const validation = StorageManager.validateSettings(decryptedSettings);
@@ -421,8 +412,7 @@ class OptionsController {
       let message = `🔍 Diagnostics Results:\n\n`;
       message += `Provider: ${currentProvider}\n`;
       message += `Current API Key Valid: ${keyValid ? '✅ YES' : '❌ NO'}\n`;
-      message += `Current API Key Length: ${currentKey?.length || 0}\n`;
-      message += `Current API Key Prefix: "${currentKey?.substring(0, 10) || 'none'}..."\n\n`;
+      message += `Current API Key Length: ${currentKey?.length || 0}\n\n`;
       
       if (!keyValid) {
         message += `❌ Issue Detected: Your ${currentProvider.toUpperCase()} API key appears to be corrupted.\n\n`;

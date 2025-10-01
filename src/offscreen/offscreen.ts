@@ -1,4 +1,5 @@
 import { ExtensionSettings, RawPageData } from '../types';
+import { DEBUG, safeLog } from '../config/debug';
 
 // Type guard for chrome APIs
 declare const chrome: any;
@@ -141,7 +142,7 @@ async function runLLMAnalysisWithScreenshots(rawData: RawPageData, settings: Ext
   console.log(`🤖 [${analysisId}] Starting LLM analysis with ${screenshots.length} screenshots`);
   
   // Build the analysis prompt
-  const systemMessage = `You are a $10,000/day Senior Conversion Rate Optimization Consultant with 20+ years of experience across ALL industries. You've optimized pages for Fortune 500 companies and generated millions in additional revenue through conversion optimization.
+  const systemMessage = `You are a $10,000/day Senior Conversion Rate Optimization Consultant with 20+ years of experience across ALL industries who avoids redundant repitition of recommendations. You've optimized pages for Fortune 500 companies and generated millions in additional revenue through conversion optimization.
 
 YOUR EXPERTISE AREAS:
 - Consumer Psychology & Behavioral Economics across different industries and purchase types
@@ -165,25 +166,25 @@ Before making ANY recommendations, you MUST first analyze and determine:
    - Blog/Content Page (engagement, nurturing)
 
 3. PURCHASE BEHAVIOR TYPE: Assess whether this is:
-   - HIGH-CONSIDERATION PURCHASE: Complex, expensive, or high-risk decisions requiring extensive research, social proof, detailed information, and trust building (B2B software, expensive products, professional services, medical/legal services)
-   - IMPULSE/LOW-CONSIDERATION PURCHASE: Quick, low-risk decisions that benefit from urgency, scarcity, and streamlined checkout (consumer products, low-cost items, entertainment, basic services)
+   - HIGH-CONSIDERATION PURCHASE: Complex, expensive, or high-risk decisions requiring extensive research, social proof, detailed information, and trust building (B2B software, expensive products, professional services, medical/legal services).
+   - IMPULSE/LOW-CONSIDERATION PURCHASE: Quick, low-risk decisions that benefit from urgency, scarcity, and streamlined checkout (consumer products, low-cost items, entertainment, basic services).
 
 INDUSTRY-SPECIFIC ANALYSIS REQUIREMENTS:
-- Apply industry-specific conversion psychology and benchmarks
-- Reference industry-standard conversion rates and best practices
-- Use terminology and value propositions relevant to that industry
-- Consider industry-specific trust signals and objections
-- Apply appropriate urgency and scarcity tactics for that market
+- Apply industry-specific conversion psychology and benchmarks.
+- Reference industry-standard conversion rates and best practices.
+- Use terminology and value propositions relevant to that industry.
+- Consider industry-specific trust signals and objections.
+- Apply appropriate urgency and scarcity tactics for that market.
 
 PAGE TYPE-SPECIFIC ANALYSIS:
-- Tailor recommendations to the page's primary conversion goal
-- Consider the user's mindset and intent when landing on this page type
-- Apply appropriate conversion frameworks for the page type
-- Adjust recommendation priorities based on page function
+- Tailor recommendations to the page's primary conversion goal.
+- Consider the user's mindset and intent when landing on this page type.
+- Apply appropriate conversion frameworks for the page type.
+- Adjust recommendation priorities based on page function.
 
 PURCHASE BEHAVIOR ADAPTATION:
-- For HIGH-CONSIDERATION: Focus on trust building, detailed information, social proof, risk reduction, consultative approach, longer-form content, multiple touchpoints
-- For IMPULSE/LOW-CONSIDERATION: Focus on simplicity, speed, urgency, clear CTAs, streamlined process, immediate gratification
+- For HIGH-CONSIDERATION: Focus on trust building, detailed information, social proof, risk reduction, consultative approach, longer-form content, multiple touchpoints.
+- For IMPULSE/LOW-CONSIDERATION: Focus on simplicity, speed, urgency, clear CTAs, streamlined process, immediate gratification.
 
 CUSTOMER JOURNEY MAPPING REQUIREMENTS:
 - Start with the visitor's entry point (search intent, traffic source, mindset)
@@ -194,19 +195,19 @@ CUSTOMER JOURNEY MAPPING REQUIREMENTS:
 - Use numbered steps that reflect the actual page flow and content order
 - Dont be overly detailed, just enough to get the point across, 1 sentence per step.
 
-ANALYSIS DEPTH REQUIRED: Your analysis must be comprehensive enough to justify a $5,000+ consulting fee. Every recommendation must be:
-1. Backed by industry-specific conversion psychology principles
-2. Tailored to the identified page type and user intent
-3. Appropriate for the purchase behavior type (high vs low consideration)
-4. Include detailed step-by-step implementation instructions in the "implementation" array
-5. Prioritized by conversion impact potential for this specific context
-6. Supported by industry-specific benchmarks and best practices
+ANALYSIS DEPTH REQUIRED: Your analysis must be comprehensive enough to justify a $10,000+ consulting fee. Every recommendation must be:
+1. Backed by industry-specific conversion psychology principles.
+2. Tailored to the identified page type and user intent.
+3. Appropriate for the purchase behavior type (high vs low consideration).
+4. Include detailed step-by-step implementation instructions in the "implementation" array.
+5. Prioritized by conversion impact potential for this specific context.
+6. Supported by industry-specific benchmarks and best practices.
 
-IMPLEMENTATION REQUIREMENT: Every recommendation MUST include 3-5 specific, actionable implementation steps that a developer or designer can execute immediately.
+IMPLEMENTATION REQUIREMENT: Every recommendation MUST include 3-5 specific, actionable implementation steps that they can execute immediately.
 
 OUTPUT QUALITY: This analysis should read like a professional consulting report that demonstrates deep understanding of the specific industry, page type, and customer psychology.`;
 
-  const userMessage = `COMPREHENSIVE CRO AUDIT REQUEST: Conduct a detailed, professional-grade conversion optimization analysis worth $5,000+ in consulting value.
+  const userMessage = `COMPREHENSIVE CRO AUDIT REQUEST: Conduct a detailed, professional-grade conversion optimization analysis worth $10,000+ in consulting value.
 
 === PAGE CONTEXT ===
 PAGE TITLE: ${rawData.title}
@@ -269,32 +270,6 @@ ${rawData.structuredContent.interactive.map((elem: any) => `${elem.type?.toUpper
 PAGE FLOW:
 ${rawData.structuredContent?.sections?.slice(0, 8).map((s: any, i: number) => `Section ${i+1}: "${s.textPreview?.substring(0, 80) || 'No preview'}..."`).join('\n') || 'NO PAGE SECTIONS'}
 
-${screenshots.length > 1 ? `=== VISUAL ANALYSIS ===
-You have access to ${screenshots.length} sequential screenshots of the complete page from top to bottom. Use these to analyze:
-- Visual hierarchy and user flow
-- CTA prominence and placement
-- Design consistency across sections
-- Mobile responsiveness
-- Color scheme effectiveness
-- Overall visual polish and trust signals
-
-IMPORTANT: When analyzing videos, carousels, and interactive elements:
-- Native video players may show a poster frame or first frame - this does NOT mean they're broken
-- Videos with visible controls or play buttons are functional
-- Carousels may appear static in screenshots but are functional if navigation controls are present
-- Animated GIFs may appear as static images in screenshots but are functional on the live page` : screenshots.length === 1 ? `=== VISUAL ANALYSIS ===
-You have access to a screenshot of the page. Use this to analyze:
-- Visual hierarchy and user flow
-- CTA prominence and placement
-- Design quality and trust signals
-- Color scheme effectiveness
-- Overall visual polish
-
-IMPORTANT: When analyzing videos, carousels, and interactive elements:
-- Native video players may show a poster frame or first frame - this does NOT mean they're broken
-- Videos with visible controls or play buttons are functional
-- Carousels may appear static in screenshots but are functional if navigation controls are present
-- Animated GIFs may appear as static images in screenshots but are functional on the live page` : ''}
 
 === ANALYSIS REQUIREMENTS ===
 
@@ -306,16 +281,16 @@ CRITICAL REQUIREMENTS:
 - Each recommendation should be distinct and non-overlapping to avoid redundancy
 - Do NOT use em Dashes in the analysis
 
+
 INTERACTIVE ELEMENT ANALYSIS:
 - You are receiving ALL interactive elements (buttons and links) without pre-filtering
-- Use the full page context, element size, position, and styling to determine:
+- Use the full page context with the screenshots to visually confirm, element size, position, and styling to determine:
   * Which are primary CTAs (likely large buttons above fold with action-oriented copy)
   * Which are secondary CTAs (smaller, less prominent, or below fold)
   * Which are navigation elements (links in header/footer, standard nav patterns)
   * Which are trust signals (Contact, About, Support in appropriate contexts)
   * Which are social proof (social media links, review platform links)
 - Consider the business type and page type when classifying element importance
-- Don't assume footer links are unimportant - they may be critical trust signals or conversion paths
 
 ANALYSIS STRUCTURE:
 
@@ -333,10 +308,25 @@ ANALYSIS STRUCTURE:
    - Top 3 strengths and top 3 weaknesses
 
 3. **VISUAL CRO ANALYSIS** (For Visual Analysis Only)
+    ${screenshots.length > 0 ? `=== VISUAL ANALYSIS ===
+    You have access to ${screenshots.length > 1 ? `${screenshots.length} sequential screenshots of the complete page from top to bottom` : `a screenshot of the page`} to supplement the analysis. Use ${screenshots.length > 1 ? 'these' : 'this'} to analyze:
+    - Visual hierarchy and user flow
+    - CTA prominence and placement
+    - Design quality, consistency, and trust signals
+    - Color scheme effectiveness
+    - Overall visual polish
+    
+    IMPORTANT: When analyzing videos, carousels, and interactive elements:
+    - Native video players may show a poster frame or first frame; this does NOT mean they're broken.
+    - Videos with visible controls or play buttons are functional.
+    - Carousels may appear static in screenshots but are functional if navigation controls are present.
+    - Animated GIFs may appear as static images but are functional on the live page` : ''}
+
    As a $10,000/day CRO auditor, provide dedicated visual conversion analysis:
    - VISUAL FLOW ANALYSIS: How does the eye naturally flow through the page? Do colors and content hierarchy guide users toward CTAs? Are there visual distractions that pull attention away from conversion goals?
    - COLOR & CONTRAST EVALUATION: How effective are the color choices for conversion? Is there sufficient contrast for readability and CTA prominence? Do colors create the right emotional response for the target audience?
-   - CRITICAL VISUAL ISSUE: What's the single biggest visual problem preventing conversions? Focus on business impact and user behavior. Provide clear, non-technical solutions that marketers and executives can understand and implement. Avoid technical details like hex codes, pixel measurements, or CSS specifications. Instead, describe the problem in terms of user experience and business outcomes, then provide simple, actionable solutions that can be communicated to designers and developers.
+   - CRITICAL VISUAL ISSUE: What's the single biggest visual problem preventing conversions? Focus on business impact and user behavior. Provide clear, non-technical solutions that marketers and executives can understand and implement. Avoid technical details like hex codes, pixel measurements, or CSS specifications. Instead, describe the problem in terms of user experience and business outcomes, then provide simple, actionable solutions that can be communicated to designers and developers, avoid repitition with other recommendations.
+   - You should verify your ideas from Context Analysis to inform these recommendations.
 
 4. **ACTIONABLE RECOMMENDATIONS** 
    - 5-7 prioritized, industry-specific recommendations with detailed step-by-step implementation
@@ -345,11 +335,12 @@ ANALYSIS STRUCTURE:
    - Effort level and timeline for each
    - Industry-specific best practices and benchmarks
    - Compelling emotionally & logically charged copy suggestions
-   - Use insights from Visual CRO Analysis to inform these recommendations
+   - You should verify your ideas from Visual CRO Analysis to inform these recommendations
 
 5. **QUICK WINS**
    - 3-5 high-impact, low-effort improvements that can be done immediately
    - Tailored to the specific page type and business model
+   - Avoid repitition with other recommendations
 
 
 CRITICAL: 
@@ -448,8 +439,8 @@ Return analysis as JSON with this ENHANCED structure:
 
 STAR RATING CRITERIA:
 ⭐ (1 Star) - Major Issues: 5+ critical problems, missing basic conversion elements (clear value prop, primary CTA, trust signals), poor UX/mobile experience, not optimized for industry/page type
-⭐⭐ (2 Stars) - Good Foundation: 2-4 significant opportunities, basic elements present but not optimized for industry/purchase behavior, decent user experience but missing key conversion triggers
-⭐⭐⭐ (3 Stars) - Well Optimized: 1-2 minor improvements possible, strong industry-appropriate conversion fundamentals, good psychology implementation, well-designed for target audience and page type`;
+⭐⭐ (2 Stars) - Good Foundation: 4-5 significant opportunities, basic elements present but not optimized for industry/purchase behavior, decent user experience but missing key conversion triggers
+⭐⭐⭐ (3 Stars) - Well Optimized: 1-3 minor improvements possible, strong industry-appropriate conversion fundamentals, good psychology implementation, well-designed for target audience and page type`;
 
   // Call the appropriate API with screenshots
   console.log(`🤖 [${analysisId}] Making API call to ${settings.provider.toUpperCase()}`);
@@ -1134,9 +1125,9 @@ async function callLLMDirectly({ pageData, url, model, params, screenshots }: an
     // Provide default settings if none exist
     const defaultSettings = {
       provider: 'openai',
-      openaiModel: 'gpt-4o-mini',
-      geminiModel: 'gemini-1.5-flash',
-      fullPageScreenshot: false,
+      openaiModel: 'gpt-5',
+      geminiModel: 'gemini-2.5-pro',
+      fullPageScreenshot: true,
       openaiApiKey: '',
       geminiApiKey: ''
     };
@@ -1145,43 +1136,40 @@ async function callLLMDirectly({ pageData, url, model, params, screenshots }: an
     // The storage proxy returns ENCRYPTED settings, we need to decrypt them
     let rawSettings = { ...defaultSettings, ...(settingsResponse.data || {}) };
     
-    console.log(`🤖 [Offscreen] Raw settings from storage (encrypted):`, {
-      openaiKeyType: typeof rawSettings.openaiApiKey,
-      openaiKeyLength: rawSettings.openaiApiKey?.length || 0,
-      openaiKeyPreview: rawSettings.openaiApiKey?.substring(0, 20) || 'empty'
-    });
+    if (DEBUG.STORAGE) {
+      console.log('🤖 [Offscreen] Raw settings from storage (encrypted)');
+      safeLog.settings(rawSettings);
+    }
     
     // Import and use EncryptionManager to decrypt
     const { EncryptionManager } = await import('../utils/encryption.js');
     const settings = await EncryptionManager.decryptSettings(rawSettings);
     
-    console.log(`🤖 [Offscreen] Settings after decryption:`, {
-      openaiKeyType: typeof settings.openaiApiKey,
-      openaiKeyLength: settings.openaiApiKey?.length || 0,
-      openaiKeyPreview: settings.openaiApiKey?.substring(0, 10) || 'empty'
-    });
+    if (DEBUG.STORAGE) {
+      console.log('🤖 [Offscreen] Settings after decryption');
+      safeLog.settings(settings);
+    }
     
     // Debug: Log the exact types and values we received
-    console.log(`🤖 [Offscreen] Settings debug - raw data:`, settingsResponse.data);
-    console.log(`🤖 [Offscreen] Settings debug - types:`, {
-      openaiApiKeyType: typeof settings.openaiApiKey,
-      geminiApiKeyType: typeof settings.geminiApiKey,
-      openaiApiKeyValue: settings.openaiApiKey,
-      geminiApiKeyValue: settings.geminiApiKey
-    });
+    if (DEBUG.API_CALLS) {
+      console.log('🤖 [Offscreen] Settings validation:', {
+        hasOpenaiKey: !!settings.openaiApiKey,
+        hasGeminiKey: !!settings.geminiApiKey,
+        openaiKeyValid: settings.openaiApiKey?.startsWith('sk-'),
+        geminiKeyValid: settings.geminiApiKey?.startsWith('AIza')
+      });
+    }
     
     // CRITICAL FIX: Detect [object Object] corruption and reject it
     if (settings.openaiApiKey && typeof settings.openaiApiKey !== 'string') {
       console.error('🔥 FATAL: OpenAI API key is corrupted (not a string):', {
-        type: typeof settings.openaiApiKey,
-        value: settings.openaiApiKey
+        type: typeof settings.openaiApiKey
       });
       throw new Error('OpenAI API key is corrupted in storage. Please go to extension settings and re-enter your API key.');
     }
     if (settings.geminiApiKey && typeof settings.geminiApiKey !== 'string') {
       console.error('🔥 FATAL: Gemini API key is corrupted (not a string):', {
-        type: typeof settings.geminiApiKey,
-        value: settings.geminiApiKey
+        type: typeof settings.geminiApiKey
       });
       throw new Error('Gemini API key is corrupted in storage. Please go to extension settings and re-enter your API key.');
     }
@@ -1230,9 +1218,7 @@ async function callLLMDirectly({ pageData, url, model, params, screenshots }: an
         console.error('Invalid OpenAI API key format:', {
           apiKeyType: typeof apiKey,
           startsWithSk: apiKey.startsWith('sk-'),
-          length: apiKey.length,
-          preview: apiKey.substring(0, 20) + '...',
-          fullKey: apiKey
+          length: apiKey.length
         });
         throw new Error('Invalid OpenAI API key format. Key should start with "sk-" and be at least 20 characters long.');
       }
@@ -1241,9 +1227,7 @@ async function callLLMDirectly({ pageData, url, model, params, screenshots }: an
         console.error('Invalid Gemini API key format:', {
           apiKeyType: typeof apiKey,
           startsWithAIza: apiKey.startsWith('AIza'),
-          length: apiKey.length,
-          preview: apiKey.substring(0, 20) + '...',
-          fullKey: apiKey
+          length: apiKey.length
         });
         throw new Error('Invalid Gemini API key format. Key should start with "AIza" and be at least 30 characters long.');
       }
@@ -1252,13 +1236,13 @@ async function callLLMDirectly({ pageData, url, model, params, screenshots }: an
     console.log(`🤖 [Offscreen] API key validation passed for ${settings.provider}`);
     
     // Log key characteristics for debugging
-    console.log(`🤖 [Offscreen] API key debug:`, {
-      provider: settings.provider,
-      keyLength: apiKey.length,
-      keyPrefix: apiKey.substring(0, 10),
-      keyHasSpecialChars: /[+\/=]/.test(apiKey),
-      keyIsBase64Like: /^[A-Za-z0-9+\/=]+$/.test(apiKey)
-    });
+    if (DEBUG.API_CALLS) {
+      console.log(`🤖 [Offscreen] API key debug:`, {
+        provider: settings.provider,
+        keyLength: apiKey.length,
+        validFormat: settings.provider === 'openai' ? apiKey.startsWith('sk-') : apiKey.startsWith('AIza')
+      });
+    }
     
     // Use existing LLM analysis logic
     const rawData = pageData;

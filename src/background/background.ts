@@ -6,6 +6,7 @@
 
 import { ScreenshotCapture } from '../utils/screenshot';
 import { NotificationManager } from '../utils/notifications';
+import { DEBUG, safeLog } from '../config/debug';
 
 console.log('Background service worker initializing...');
 
@@ -314,17 +315,9 @@ async function handleStorageSyncGet(msg: any, sendResponse: (response: any) => v
     
     console.log(`[BG] STORAGE_SYNC_GET ${key}:`, data ? 'found' : 'not found');
     if (data && key === 'extension_settings') {
-      console.log(`[BG] Settings debug:`, {
-        provider: data.provider,
-        hasOpenaiKey: !!(data.openaiApiKey && data.openaiApiKey.length > 0),
-        hasGeminiKey: !!(data.geminiApiKey && data.geminiApiKey.length > 0),
-        openaiKeyType: typeof data.openaiApiKey,
-        geminiKeyType: typeof data.geminiApiKey,
-        openaiKeyLength: data.openaiApiKey?.length || 0,
-        geminiKeyLength: data.geminiApiKey?.length || 0,
-        openaiKeyValue: data.openaiApiKey,
-        geminiKeyValue: data.geminiApiKey
-      });
+      if (DEBUG.STORAGE) {
+        safeLog.settings(data);
+      }
       
       // CRITICAL: Detect corruption and REJECT it - DO NOT convert to string
       if (data.openaiApiKey && typeof data.openaiApiKey !== 'string') {
@@ -434,22 +427,37 @@ async function handleScrapePage(msg: any, sendResponse: (response: any) => void)
     
     const tabId = tabs[0].id;
     
-    // Inject the content script
-    console.log(`[BG] Injecting content script into tab ${tabId}`);
+    // Check if content script is already loaded
+    console.log(`[BG] Checking if content script is already loaded in tab ${tabId}`);
+    let isContentScriptLoaded = false;
+    
     try {
-      await chrome.scripting.executeScript({
-        target: { tabId },
-        files: ['content.js']
-      });
-      console.log(`[BG] Content script injection successful`);
-    } catch (injectionError) {
-      console.error(`[BG] Content script injection failed:`, injectionError);
-      throw new Error(`Content script injection failed: ${injectionError instanceof Error ? injectionError.message : 'Unknown error'}`);
+      // Try to send a test message - if it works, script is loaded
+      await chrome.tabs.sendMessage(tabId, { action: 'ping' });
+      isContentScriptLoaded = true;
+      console.log(`[BG] Content script already loaded, skipping injection`);
+    } catch (pingError) {
+      console.log(`[BG] Content script not loaded, will inject`);
     }
     
-    // Wait a bit for content script to initialize
-    console.log(`[BG] Waiting for content script initialization...`);
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Increased wait time
+    // Only inject if not already loaded
+    if (!isContentScriptLoaded) {
+      console.log(`[BG] Injecting content script into tab ${tabId}`);
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          files: ['content.js']
+        });
+        console.log(`[BG] Content script injection successful`);
+        
+        // Wait for content script to initialize
+        console.log(`[BG] Waiting for content script initialization...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (injectionError) {
+        console.error(`[BG] Content script injection failed:`, injectionError);
+        throw new Error(`Content script injection failed: ${injectionError instanceof Error ? injectionError.message : 'Unknown error'}`);
+      }
+    }
     
     // Send message to content script to scrape the page
     console.log(`[BG] Sending scrapePage message to content script`);

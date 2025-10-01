@@ -1,5 +1,6 @@
 import { CachedAudit, ExtensionSettings, LLMAnalysis, RawPageData } from '../types';
 import { EncryptionManager } from './encryption';
+import { DEBUG, safeLog } from '../config/debug';
 
 export class StorageManager {
   private static readonly SETTINGS_KEY = 'extension_settings';
@@ -12,9 +13,9 @@ export class StorageManager {
         provider: 'openai', 
         openaiApiKey: '', 
         geminiApiKey: '', 
-        openaiModel: 'gpt-5-mini', 
-        geminiModel: 'gemini-2.5-flash',
-        fullPageScreenshot: false
+        openaiModel: 'gpt-5', 
+        geminiModel: 'gemini-2.5-pro',
+        fullPageScreenshot: true
       };
 
       console.log('Raw settings retrieved:', {
@@ -29,15 +30,10 @@ export class StorageManager {
       // Decrypt sensitive fields
       const decryptedSettings = await EncryptionManager.decryptSettings(rawSettings);
       
-      console.log('Decrypted settings:', {
-        provider: decryptedSettings.provider,
-        hasOpenaiKey: !!decryptedSettings.openaiApiKey,
-        hasGeminiKey: !!decryptedSettings.geminiApiKey,
-        openaiKeyLength: decryptedSettings.openaiApiKey?.length || 0,
-        geminiKeyLength: decryptedSettings.geminiApiKey?.length || 0,
-        openaiKeyPrefix: decryptedSettings.openaiApiKey?.substring(0, 5) || '',
-        geminiKeyPrefix: decryptedSettings.geminiApiKey?.substring(0, 5) || ''
-      });
+      if (DEBUG.STORAGE) {
+        console.log('Decrypted settings:');
+        safeLog.settings(decryptedSettings);
+      }
 
       // Validate decrypted settings
       const validation = this.validateSettings(decryptedSettings);
@@ -56,9 +52,9 @@ export class StorageManager {
         provider: 'openai',
         openaiApiKey: '',
         geminiApiKey: '',
-        openaiModel: 'gpt-5-mini',
-        geminiModel: 'gemini-2.5-flash',
-        fullPageScreenshot: false
+        openaiModel: 'gpt-5',
+        geminiModel: 'gemini-2.5-pro',
+        fullPageScreenshot: true
       };
     }
   }

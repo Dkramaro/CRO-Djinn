@@ -12,6 +12,13 @@ if (!(window as any).__croGenieContentScriptLoaded) {
   // Message listener for popup communications
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('🔧 [Content] Received message:', request);
+    
+    // Ping handler to check if script is loaded
+    if (request.action === 'ping') {
+      sendResponse({ success: true, loaded: true });
+      return false;
+    }
+    
     if (request.action === 'scrapePage') {
       console.log('🔧 [Content] Handling scrapePage request');
       handleScrapeRequest(sendResponse);

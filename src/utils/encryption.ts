@@ -2,6 +2,8 @@
  * Simple encryption utility for sensitive data
  * Uses built-in browser crypto APIs for basic protection
  */
+import { DEBUG, safeLog } from '../config/debug';
+
 export class EncryptionManager {
   private static readonly ALGORITHM = 'AES-GCM';
   private static readonly KEY_LENGTH = 256;
@@ -44,8 +46,9 @@ export class EncryptionManager {
     try {
       if (!plaintext) return plaintext;
 
-      console.log('Encrypting data, original length:', plaintext.length);
-      console.log('Original data preview:', plaintext.substring(0, 10) + '...');
+      if (DEBUG.ENCRYPTION) {
+        console.log('🔐 Encrypting data, length:', plaintext.length);
+      }
 
       // Use a combination of extension ID and current hostname as key material
       const keyMaterial = `cro-djinn-${chrome.runtime.id}-encryption-key`;
@@ -75,17 +78,9 @@ export class EncryptionManager {
       }
       const base64Result = btoa(binaryString);
       
-      console.log('Encryption debug:', {
-        plaintextLength: plaintext.length,
-        dataLength: data.length,
-        ivLength: iv.length,
-        encryptedLength: encrypted.byteLength,
-        combinedLength: combined.length,
-        base64Length: base64Result.length
-      });
-      
-      console.log('Encryption successful, base64 result length:', base64Result.length);
-      console.log('Base64 result preview:', base64Result.substring(0, 20) + '...');
+      if (DEBUG.ENCRYPTION) {
+        console.log('✅ Encryption successful, output length:', base64Result.length);
+      }
       
       return base64Result;
     } catch (error) {
@@ -104,13 +99,17 @@ export class EncryptionManager {
 
       // Check if data looks encrypted (base64)
       if (!this.isBase64(encryptedData)) {
-        console.log('Data is not base64, returning as-is:', encryptedData.substring(0, 20) + '...');
+        if (DEBUG.ENCRYPTION) {
+          console.log('🔐 Data is not base64 encoded, returning as-is');
+        }
         return encryptedData; // Return as-is if not encrypted
       }
 
       // Check for reasonable length - encrypted data should be longer than original
       if (encryptedData.length < 20) {
-        console.log('Encrypted data too short, returning as-is');
+        if (DEBUG.ENCRYPTION) {
+          console.log('🔐 Encrypted data too short, returning as-is');
+        }
         return encryptedData;
       }
 
@@ -140,12 +139,9 @@ export class EncryptionManager {
       const iv = combined.slice(0, this.IV_LENGTH);
       const encrypted = combined.slice(this.IV_LENGTH);
 
-      console.log('Decryption debug:', {
-        encryptedDataLength: encryptedData.length,
-        combinedLength: combined.length,
-        ivLength: iv.length,
-        encryptedLength: encrypted.length
-      });
+      if (DEBUG.ENCRYPTION) {
+        console.log('🔐 Decryption in progress, data length:', encryptedData.length);
+      }
 
       const decrypted = await crypto.subtle.decrypt(
         { name: this.ALGORITHM, iv },
@@ -164,13 +160,13 @@ export class EncryptionManager {
       
       // Ensure result is not empty or corrupted
       if (!result || result === '[object Object]') {
-        console.error('🔐 FATAL: Decryption produced corrupted result:', result);
+        console.error('🔐 FATAL: Decryption produced corrupted result');
         throw new Error('Decryption produced corrupted or empty result');
       }
       
-      console.log('Decryption successful, result length:', result.length);
-      console.log('Decrypted result preview:', result.substring(0, 10) + '...');
-      console.log('Decrypted result type check:', typeof result);
+      if (DEBUG.ENCRYPTION) {
+        console.log('✅ Decryption successful, result length:', result.length);
+      }
       
       return result;
     } catch (error) {
@@ -218,12 +214,10 @@ export class EncryptionManager {
   static async decryptSettings(settings: any): Promise<any> {
     const decrypted = { ...settings };
     
-    console.log('🔐 Decrypting settings, input types:', {
-      openaiKeyType: typeof decrypted.openaiApiKey,
-      geminiKeyType: typeof decrypted.geminiApiKey,
-      openaiKeyValue: decrypted.openaiApiKey,
-      geminiKeyValue: decrypted.geminiApiKey
-    });
+    if (DEBUG.ENCRYPTION) {
+      console.log('🔐 Decrypting settings...');
+      safeLog.settings(decrypted);
+    }
     
     if (decrypted.openaiApiKey) {
       // CRITICAL FIX: Handle [object Object] corruption
@@ -297,12 +291,10 @@ export class EncryptionManager {
       }
     }
 
-    console.log('🔐 Decryption complete, output types:', {
-      openaiKeyType: typeof decrypted.openaiApiKey,
-      geminiKeyType: typeof decrypted.geminiApiKey,
-      openaiKeyLength: decrypted.openaiApiKey?.length || 0,
-      geminiKeyLength: decrypted.geminiApiKey?.length || 0
-    });
+    if (DEBUG.ENCRYPTION) {
+      console.log('✅ Decryption complete');
+      safeLog.settings(decrypted);
+    }
 
     return decrypted;
   }
