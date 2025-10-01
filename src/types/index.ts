@@ -14,6 +14,16 @@ export interface RawPageData {
     videos: any[];
     interactive: any[];
     sections: any[];
+    stickyHeader?: {
+      exists: boolean;
+      type: string | null;
+      positionType?: string;
+      totalHeight: number;
+      elementCount?: number;
+      height: number;
+      elements: any[];
+      contents?: any[];
+    };
   };
   pageMetadata: any;
   timestamp: number;

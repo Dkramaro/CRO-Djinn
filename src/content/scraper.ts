@@ -108,6 +108,7 @@ export class PageScraper {
     const lists = this.getLists();
     const videos = this.getVideos();
     const interactive = this.getInteractiveWidgets();
+    const stickyHeader = this.detectStickyHeader();
 
     return {
       headings,
@@ -117,6 +118,7 @@ export class PageScraper {
       lists,
       videos,
       interactive,
+      stickyHeader,
       sections: this.getSections()
     };
   }
@@ -333,6 +335,92 @@ export class PageScraper {
     });
     
     return interactive;
+  }
+
+  private detectStickyHeader(): any {
+    const fixedElements: Array<{element: Element, height: number, top: number}> = [];
+    
+    // Find elements with fixed or sticky positioning at the top
+    const allElements = document.querySelectorAll('*');
+    
+    for (const element of allElements) {
+      const style = window.getComputedStyle(element);
+      const position = style.position;
+      
+      // Check for fixed or sticky positioning
+      if (position === 'fixed' || position === 'sticky') {
+        const rect = element.getBoundingClientRect();
+        const height = rect.height;
+        const top = rect.top;
+        
+        // Only consider elements that are:
+        // 1. Actually visible (height > 0)
+        // 2. At the top of the viewport (top <= 50px from top)
+        // 3. Have meaningful height (at least 20px)
+        if (height > 20 && top <= 50 && rect.bottom > 0 && this.isVisible(element)) {
+          fixedElements.push({ element, height, top });
+        }
+      }
+    }
+    
+    if (fixedElements.length === 0) {
+      return {
+        exists: false,
+        type: null,
+        height: 0,
+        elements: []
+      };
+    }
+    
+    // Sort by top position and height to find the most prominent header
+    fixedElements.sort((a, b) => {
+      if (Math.abs(a.top - b.top) < 10) {
+        return b.height - a.height;
+      }
+      return a.top - b.top;
+    });
+    
+    // Calculate total header height
+    let totalHeaderHeight = 0;
+    let lastBottom = 0;
+    
+    for (const fixed of fixedElements) {
+      const rect = fixed.element.getBoundingClientRect();
+      if (rect.top >= lastBottom - 10) {
+        totalHeaderHeight += rect.height;
+        lastBottom = rect.bottom;
+      }
+    }
+    
+    // Extract what's in the sticky header
+    const headerContents = fixedElements.map(({ element }) => {
+      const tag = element.tagName.toLowerCase();
+      const text = element.textContent?.trim().substring(0, 200) || '';
+      
+      // Find CTAs in the sticky header
+      const ctaButtons = element.querySelectorAll('button, a[href], [role="button"]');
+      const ctas = Array.from(ctaButtons)
+        .filter(btn => this.isVisible(btn))
+        .map(btn => btn.textContent?.trim())
+        .filter(text => text && text.length > 0)
+        .slice(0, 5); // Limit to 5 CTAs
+      
+      return {
+        tag,
+        textPreview: text,
+        ctas,
+        height: element.getBoundingClientRect().height
+      };
+    });
+    
+    return {
+      exists: true,
+      type: fixedElements[0].element.tagName.toLowerCase(),
+      positionType: window.getComputedStyle(fixedElements[0].element).position,
+      totalHeight: Math.round(totalHeaderHeight),
+      elementCount: fixedElements.length,
+      contents: headerContents
+    };
   }
 
   private getParentSectionIdentifier(element: Element): string {

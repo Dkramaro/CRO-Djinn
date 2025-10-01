@@ -92,11 +92,28 @@ export default defineConfig({
           const iconsDir = resolve(__dirname, 'dist/icons');
           mkdirSync(iconsDir, { recursive: true });
           
-          // Copy main logo
-          copyFileSync(
-            resolve(__dirname, 'icons/CRO-Djinn Logo.png'),
-            resolve(__dirname, 'dist/icons/CRO-Djinn Logo.png')
-          );
+          // Copy extension icons (properly sized for Chrome Web Store)
+          const extensionIcons = ['icon-16.png', 'icon-48.png', 'icon-128.png'];
+          extensionIcons.forEach(iconFile => {
+            try {
+              copyFileSync(
+                resolve(__dirname, `icons/${iconFile}`),
+                resolve(__dirname, `dist/icons/${iconFile}`)
+              );
+            } catch (error) {
+              console.warn(`Failed to copy icon ${iconFile}:`, error.message);
+            }
+          });
+          
+          // Copy main logo (for backwards compatibility)
+          try {
+            copyFileSync(
+              resolve(__dirname, 'icons/CRO-Djinn Logo.png'),
+              resolve(__dirname, 'dist/icons/CRO-Djinn Logo.png')
+            );
+          } catch (error) {
+            console.warn('Failed to copy main logo:', error.message);
+          }
           
           // Copy star rating images
           const starImages = ['1 Star.png', '2 star.png', '3 Star.png'];

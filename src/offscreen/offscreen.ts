@@ -270,6 +270,20 @@ ${rawData.structuredContent.interactive.map((elem: any) => `${elem.type?.toUpper
 PAGE FLOW:
 ${rawData.structuredContent?.sections?.slice(0, 8).map((s: any, i: number) => `Section ${i+1}: "${s.textPreview?.substring(0, 80) || 'No preview'}..."`).join('\n') || 'NO PAGE SECTIONS'}
 
+${rawData.structuredContent?.stickyHeader?.exists ? `
+STICKY HEADER DETECTED:
+Position Type: ${rawData.structuredContent.stickyHeader.positionType}
+Total Height: ${rawData.structuredContent.stickyHeader.totalHeight}px
+Element Count: ${rawData.structuredContent.stickyHeader.elementCount}
+Contents: ${rawData.structuredContent.stickyHeader.contents?.map((c: any) => 
+  `${c.tag.toUpperCase()} (${c.height}px)${c.ctas.length > 0 ? ` - CTAs: ${c.ctas.join(', ')}` : ''}`
+).join(' | ') || 'No content details available'}
+
+** IMPORTANT: This page ALREADY HAS a sticky/fixed header that follows users on scroll. Do NOT recommend adding a sticky header. Only make a recommendation IF the current design and CTA prominence is insufficient for maximizing conversions based on your assessment, when evaluating this leverage the screenshots to determine this.
+` : `
+NO STICKY/FIXED HEADER DETECTED:
+This page does not currently have a sticky or fixed header that follows users on scroll. Depending on the page type, length, and conversion goals, this may be an opportunity to add one with a clear CTA.
+`}
 
 === ANALYSIS REQUIREMENTS ===
 
@@ -835,7 +849,8 @@ function cleanFilteredStructuredContent(structuredContent: any): any {
     
     // Pass through everything else unchanged
     videos: structuredContent.videos || [],
-    interactive: structuredContent.interactive || []
+    interactive: structuredContent.interactive || [],
+    stickyHeader: structuredContent.stickyHeader || { exists: false, type: null, height: 0, elements: [] }
   };
 }
 
@@ -1071,7 +1086,8 @@ async function capturePage(url: string): Promise<any> {
         links: [], 
         lists: [], 
         sections: [], 
-        images: [] 
+        images: [],
+        stickyHeader: { exists: false, type: null, height: 0, elements: [] }
       }
     };
   }
