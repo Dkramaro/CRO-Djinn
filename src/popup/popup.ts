@@ -153,6 +153,20 @@ class PopupController {
       e.preventDefault();
       this.handleVisualAnalysisLinkClick();
     });
+
+    // Privacy details link
+    const privacyDetailsLink = document.getElementById('privacy-details-link');
+    privacyDetailsLink?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.handlePrivacyDetailsClick();
+    });
+
+    // Manage consent link
+    const manageConsentLink = document.getElementById('manage-consent-link');
+    manageConsentLink?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.handleManageConsentClick();
+    });
   }
 
   /**
@@ -1051,6 +1065,14 @@ class PopupController {
   }
 
   private handleVisualAnalysisLinkClick(): void {
+    chrome.runtime.openOptionsPage();
+  }
+
+  private handlePrivacyDetailsClick(): void {
+    chrome.tabs.create({ url: 'https://cro-djinn.vercel.app/privacy' });
+  }
+
+  private handleManageConsentClick(): void {
     chrome.runtime.openOptionsPage();
   }
 

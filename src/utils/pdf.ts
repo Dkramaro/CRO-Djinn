@@ -298,6 +298,9 @@ export class PDFExporter {
         // Add logo to PDF
         this.doc.addImage(this.brandLogo, 'PNG', logoX, logoY, logoWidth, logoHeight);
         
+        // Add clickable hyperlink over the logo
+        this.doc.link(logoX, logoY, logoWidth, logoHeight, { url: 'https://cro-djinn.vercel.app/' });
+        
         console.log(`Brand logo added at position: ${logoX}, ${logoY} with size: ${logoWidth}x${logoHeight}`);
       } else {
         console.warn('Brand logo not available, skipping logo placement');
