@@ -2,6 +2,7 @@ import { StorageManager } from '../utils/storage';
 import { ConsentManager } from '../utils/consent';
 import { ExtensionSettings } from '../types';
 import { DEBUG, safeLog } from '../config/debug';
+import { sanitizeErrorMessage } from '../utils/security';
 
 class OptionsController {
   private form: HTMLFormElement | null = null;
@@ -261,10 +262,11 @@ class OptionsController {
       }
     } else {
       // Test Gemini API key with a simple request
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`, {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models`, {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
         }
       });
 

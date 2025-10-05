@@ -180,10 +180,26 @@ async function handleStartAnalysis(msg: any, sendResponse: (response: any) => vo
       });
       console.log(`[BG] RUN_ANALYSIS response:`, response);
       
+      if (!response || !response.ok) {
+        throw new Error(response?.error || 'Failed to start analysis');
+      }
+      
       console.log(`[BG] RUN_ANALYSIS dispatched successfully`);
       // The offscreen document will handle the actual analysis and update storage directly
     } catch (messageError) {
       console.error(`[BG] Failed to send RUN_ANALYSIS message:`, messageError);
+      
+      // Update job state to failed
+      await chrome.storage.local.set({
+        [`job:${key}`]: {
+          key,
+          state: "failed",
+          updatedAt: Date.now(),
+          error: messageError instanceof Error ? messageError.message : String(messageError),
+          failedAt: Date.now()
+        }
+      });
+      
       throw messageError;
     }
     

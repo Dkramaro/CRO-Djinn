@@ -1,5 +1,6 @@
 import { ExtensionSettings, RawPageData } from '../types';
 import { DEBUG, safeLog } from '../config/debug';
+import { sanitizeErrorMessage } from '../utils/security';
 
 // Type guard for chrome APIs
 declare const chrome: any;
@@ -506,17 +507,19 @@ async function callGeminiAPIWithScreenshots(systemMessage: string, userMessage: 
     }
   };
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey
     },
     body: JSON.stringify(requestBody)
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Gemini API error (${response.status}): ${errorText}`);
+    const sanitizedError = sanitizeErrorMessage(errorText);
+    throw new Error(`Gemini API error (${response.status}): ${sanitizedError}`);
   }
 
   const data = await response.json();
@@ -606,7 +609,8 @@ async function callOpenAIAPIWithScreenshots(systemMessage: string, userMessage: 
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`OpenAI API error (${response.status}): ${errorText}`);
+    const sanitizedError = sanitizeErrorMessage(errorText);
+    throw new Error(`OpenAI API error (${response.status}): ${sanitizedError}`);
   }
 
   const data = await response.json();

@@ -38,7 +38,7 @@
   "homepage_url": "https://cro-djinn.vercel.app/privacy",
   "web_accessible_resources": [{
     "resources": ["src/offscreen/offscreen.html", "icons/*"],
-    "matches": ["<all_urls>"]
+    "matches": []
   }],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"

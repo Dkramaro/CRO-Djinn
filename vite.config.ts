@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import { resolve } from 'path';
 import { copyFileSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   base: './',
   build: {
     outDir: 'dist',
@@ -30,12 +30,42 @@ export default defineConfig({
       },
     },
   },
+  esbuild: {
+    // Development: Keep all console logs for debugging
+    // Production: Remove ALL console logs to prevent sensitive data exposure
+    ...(mode === 'production' && {
+      drop: ['console', 'debugger'],
+    }),
+  },
   resolve: {
     alias: {
       '@': '/src',
     },
   },
   plugins: [
+    {
+      name: 'remove-debug-production',
+      transform(code, id) {
+        // Remove debug code in production builds
+        if (mode === 'production' && id.includes('config/debug')) {
+          return {
+            code: `
+              export const DEBUG = {
+                ENCRYPTION: false,
+                STORAGE: false,
+                API_CALLS: false,
+                GENERAL: false
+              };
+              export const safeLog = {
+                apiKey: () => {},
+                settings: () => {}
+              };
+            `,
+            map: null
+          };
+        }
+      }
+    },
     {
       name: 'manifest-fix',
       closeBundle() {
@@ -133,4 +163,4 @@ export default defineConfig({
       }
     }
   ],
-});
+}));

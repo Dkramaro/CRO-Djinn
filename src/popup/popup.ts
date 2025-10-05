@@ -212,6 +212,11 @@ class PopupController {
         }
       } catch (error) {
         console.warn(`❌ [Popup] Poll backup failed:`, error);
+        // Don't stop polling on transient errors, but log for debugging
+        if (error instanceof Error && error.message.includes('Extension context invalidated')) {
+          // Extension was reloaded, stop polling
+          this.stopStatusPolling();
+        }
       }
     }, 3000);
 
@@ -250,10 +255,15 @@ class PopupController {
           }
         } catch (apiError) {
           console.warn(`❌ [Popup] hydrateOnce GET_STATUS fallback failed:`, apiError);
+          // Non-fatal error, continue with idle state
         }
       }
     } catch (error) {
       console.warn(`❌ [Popup] hydrateOnce failed:`, error);
+      // Show error state to user if storage access fails
+      if (error instanceof Error && !error.message.includes('Extension context')) {
+        this.showError('Failed to check for existing analysis. Please try again.');
+      }
     }
   }
 
@@ -387,18 +397,24 @@ class PopupController {
       this.updateUI();
 
       // Send START_ANALYSIS message - Friend's exact pattern
-      const response = await chrome.runtime.sendMessage({ 
-        type: "START_ANALYSIS", 
-        payload: { 
-          key: this.currentJobKey,
-          url: this.currentUrl, 
-          model: settings.openaiModel || settings.geminiModel, 
-          params: {
-            provider: settings.provider,
-            fullPage: settings.fullPageScreenshot || false
-          }
-        } 
-      });
+      let response;
+      try {
+        response = await chrome.runtime.sendMessage({ 
+          type: "START_ANALYSIS", 
+          payload: { 
+            key: this.currentJobKey,
+            url: this.currentUrl, 
+            model: settings.openaiModel || settings.geminiModel, 
+            params: {
+              provider: settings.provider,
+              fullPage: settings.fullPageScreenshot || false
+            }
+          } 
+        });
+      } catch (messageError) {
+        console.error(`❌ [Popup] Failed to send START_ANALYSIS:`, messageError);
+        throw new Error(`Failed to communicate with background script: ${messageError instanceof Error ? messageError.message : 'Unknown error'}`);
+      }
 
       if (response?.ok) {
         console.log(`✅ [Popup] START_ANALYSIS acknowledged for key: ${response.key}`);
