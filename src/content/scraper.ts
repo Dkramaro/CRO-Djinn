@@ -352,12 +352,22 @@ export class PageScraper {
         const rect = element.getBoundingClientRect();
         const height = rect.height;
         const top = rect.top;
+        const tag = element.tagName.toLowerCase();
+        
+        // Check if this is a semantic header/nav element by tag or class name
+        const isHeaderElement = tag === 'header' || tag === 'nav' || 
+                               element.className.toLowerCase().includes('header') ||
+                               element.className.toLowerCase().includes('nav');
+        
+        // Use different threshold based on element type
+        // Headers get more tolerance for spacing/banners above them
+        const topThreshold = isHeaderElement ? 200 : 50;
         
         // Only consider elements that are:
         // 1. Actually visible (height > 0)
-        // 2. At the top of the viewport (top <= 50px from top)
+        // 2. At the top of the viewport (within threshold)
         // 3. Have meaningful height (at least 20px)
-        if (height > 20 && top <= 50 && rect.bottom > 0 && this.isVisible(element)) {
+        if (height > 20 && top <= topThreshold && rect.bottom > 0 && this.isVisible(element)) {
           fixedElements.push({ element, height, top });
         }
       }
@@ -562,7 +572,7 @@ export class PageScraper {
     
     return trackingPatterns.some(pattern => 
       id.includes(pattern) || className.includes(pattern)
-    ) || element.closest('script, style, noscript');
+    ) || !!element.closest('script, style, noscript');
   }
 
   private isTrackingText(text: string): boolean {

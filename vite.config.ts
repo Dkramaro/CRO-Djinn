@@ -67,6 +67,32 @@ export default defineConfig(({ mode }) => ({
       }
     },
     {
+      name: 'remove-cdn-references',
+      renderChunk(code, chunk) {
+        // Remove CDN references from bundled code to comply with Manifest V3
+        // This runs after bundling, so it catches minified code too
+        if (code.includes('cdnjs.cloudflare.com')) {
+          // Replace the entire pdfobjectnewwindow case with an error throw
+          // Handle both minified and non-minified code
+          code = code.replace(
+            /case\s*["']pdfobjectnewwindow["']\s*:[\s\S]*?break;/g,
+            'case"pdfobjectnewwindow":throw new Error("This output mode is not supported");break;'
+          );
+          // Remove any remaining CDN URLs
+          code = code.replace(
+            /https:\/\/cdnjs\.cloudflare\.com[^"'\s]*/g,
+            ''
+          );
+          // Remove integrity attributes that reference the CDN
+          code = code.replace(
+            /integrity\s*=\s*["'][^"']*sha512[^"']*["']/g,
+            ''
+          );
+        }
+        return code;
+      }
+    },
+    {
       name: 'manifest-fix',
       closeBundle() {
         // Copy and fix manifest.json

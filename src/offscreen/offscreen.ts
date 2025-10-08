@@ -272,18 +272,18 @@ PAGE FLOW:
 ${rawData.structuredContent?.sections?.slice(0, 8).map((s: any, i: number) => `Section ${i+1}: "${s.textPreview?.substring(0, 80) || 'No preview'}..."`).join('\n') || 'NO PAGE SECTIONS'}
 
 ${rawData.structuredContent?.stickyHeader?.exists ? `
-STICKY HEADER DETECTED:
+⚠️ STICKY HEADER ALREADY EXISTS - DO NOT RECOMMEND ADDING ONE ⚠️
 Position Type: ${rawData.structuredContent.stickyHeader.positionType}
 Total Height: ${rawData.structuredContent.stickyHeader.totalHeight}px
 Element Count: ${rawData.structuredContent.stickyHeader.elementCount}
 Contents: ${rawData.structuredContent.stickyHeader.contents?.map((c: any) => 
   `${c.tag.toUpperCase()} (${c.height}px)${c.ctas.length > 0 ? ` - CTAs: ${c.ctas.join(', ')}` : ''}`
 ).join(' | ') || 'No content details available'}
-
-** IMPORTANT: This page ALREADY HAS a sticky/fixed header that follows users on scroll. Do NOT recommend adding a sticky header. Only make a recommendation IF the current design and CTA prominence is insufficient for maximizing conversions based on your assessment, when evaluating this leverage the screenshots to determine this.
 ` : `
-NO STICKY/FIXED HEADER DETECTED:
-This page does not currently have a sticky or fixed header that follows users on scroll. Depending on the page type, length, and conversion goals, this may be an opportunity to add one with a clear CTA.
+⚠️ NO HEADER DETECTED BY CODE - VERIFY WITH SCREENSHOTS BEFORE RECOMMENDING ⚠️
+Compare Screenshot #1 (top of page) with Screenshot #4-5 (mid-page).
+If a header appears in BOTH screenshots, do NOT recommend adding a sticky header.
+Only recommend a sticky header if NO persistent header is visible when scrolling.
 `}
 
 === ANALYSIS REQUIREMENTS ===

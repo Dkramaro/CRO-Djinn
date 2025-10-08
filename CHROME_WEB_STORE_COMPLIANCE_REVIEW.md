@@ -466,3 +466,15 @@ Host Permissions (OpenAI/Gemini): Send page data to AI services for analysis
 ## 🙏 ACKNOWLEDGMENT
 
 This is one of the **most privacy-conscious and well-implemented** Chrome extensions I've reviewed. Excellent work!
+
+Claim vs. Reality Matrix:
+Privacy Policy Claim	Code Reality	Status
+"Collects page content, structure, screenshots"	✅ scraper.ts collects exactly this	✅ MATCH
+"API keys encrypted locally"	✅ encryption.ts uses AES-GCM	✅ MATCH
+"Data sent to OpenAI/Google Gemini"	✅ Only these two APIs called	✅ MATCH
+"No browsing history collected"	✅ Only analyzes pages user clicks	✅ MATCH
+"Consent expires after 30 days"	✅ ConsentManager enforces this	✅ MATCH
+"Cache stored locally for 7 days"	✅ cleanOldCache() deletes after 24h	⚠️ MISMATCH
+"No third-party data sharing"	✅ Zero analytics/tracking code	✅ MATCH
+"Data minimization"	✅ Only scrapes visible content	✅ MATCH
+
