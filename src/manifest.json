@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CRO Djinn",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "AI-powered landing page analysis to maximize conversion rates",
   "background": {
     "service_worker": "background.js",

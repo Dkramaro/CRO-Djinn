@@ -4,7 +4,7 @@ A Chrome extension that analyzes landing pages to maximize conversion likelihood
 
 ## Features
 
-- **Dual AI Provider Support**: Choose between OpenAI (GPT-4.1, GPT-5) or Google Gemini (2.5 Pro, 2.5 Flash) models
+- **Dual AI Provider Support**: Choose between OpenAI (GPT-5.2, GPT-5.1, GPT-5 Mini) or Google Gemini (3 Pro, 3 Flash, 2.5 Pro) models
 - **Visual + Content Analysis**: Gemini users get enhanced screenshot analysis for comprehensive visual insights alongside content strategy
 - **Industry-Aware AI Analysis**: Deep industry-specific knowledge for SaaS, E-commerce, B2B Services, Healthcare, Financial Services, and more
 - **Page-Type Intelligence**: Automatically detects and adapts analysis for Homepage, Product Page, Landing Page, Pricing Page, or Content Page
@@ -56,7 +56,7 @@ A Chrome extension that analyzes landing pages to maximize conversion likelihood
    - Click the extension icon in your toolbar
    - Click "Options" to open settings
    - Enter your OpenAI API key
-   - Choose your preferred model (GPT-4o Mini recommended for best cost/quality balance)
+   - Choose your preferred model (GPT-5.2 or Gemini 3 Pro recommended for best quality)
    - Click "Save Settings"
 
 ## Usage
@@ -165,10 +165,17 @@ The AI automatically infers the primary conversion goal:
 ## Configuration Options
 
 ### Model Selection
-- **GPT-4o Mini** (Recommended): Best cost/performance balance
-- **GPT-4o**: Higher quality analysis, higher cost
-- **GPT-4 Turbo**: Advanced analysis capabilities
-- **GPT-3.5 Turbo**: Budget option with good results
+
+**OpenAI:**
+- **GPT-5.2** (Recommended): Highest quality with advanced reasoning
+- **GPT-5.1**: Previous flagship model
+- **GPT-5 Mini**: Faster, cost-effective option
+- **GPT-4.1 / GPT-4.1 Mini**: Legacy models
+
+**Google Gemini:**
+- **Gemini 3 Pro** (Recommended): Advanced multimodal capabilities
+- **Gemini 3 Flash**: Faster processing at lower cost
+- **Gemini 2.5 Pro**: Previous generation model
 
 ### Cache Management
 - View number of cached audits

@@ -142,10 +142,10 @@ class OptionsController {
       
       // Set models
       if (this.openaiModelSelect) {
-        this.openaiModelSelect.value = settings.openaiModel || 'gpt-5';
+        this.openaiModelSelect.value = settings.openaiModel || 'gpt-5.1';
       }
       if (this.geminiModelSelect) {
-        this.geminiModelSelect.value = settings.geminiModel || 'gemini-2.5-pro';
+        this.geminiModelSelect.value = settings.geminiModel || 'gemini-3-flash-preview';
       }
       
       // Set full page screenshot setting
@@ -199,8 +199,8 @@ class OptionsController {
         geminiApiKey: provider === 'gemini' 
           ? (this.geminiApiKeyInput?.value.trim() || '') 
           : preservedGeminiKey,
-        openaiModel: this.openaiModelSelect?.value || 'gpt-5',
-        geminiModel: this.geminiModelSelect?.value || 'gemini-2.5-pro',
+        openaiModel: this.openaiModelSelect?.value || 'gpt-5.1',
+        geminiModel: this.geminiModelSelect?.value || 'gemini-3-flash-preview',
         fullPageScreenshot: this.fullPageScreenshotCheckbox?.checked || false
       };
 

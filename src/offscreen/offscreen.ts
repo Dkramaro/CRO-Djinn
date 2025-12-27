@@ -1145,8 +1145,8 @@ async function callLLMDirectly({ pageData, url, model, params, screenshots }: an
     // Provide default settings if none exist
     const defaultSettings = {
       provider: 'openai',
-      openaiModel: 'gpt-5',
-      geminiModel: 'gemini-2.5-pro',
+      openaiModel: 'gpt-5.1',
+      geminiModel: 'gemini-3-flash-preview',
       fullPageScreenshot: true,
       openaiApiKey: '',
       geminiApiKey: ''

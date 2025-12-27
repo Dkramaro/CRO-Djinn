@@ -2,6 +2,31 @@ import { CachedAudit, ExtensionSettings, LLMAnalysis, RawPageData } from '../typ
 import { EncryptionManager } from './encryption';
 import { DEBUG, safeLog } from '../config/debug';
 
+/**
+ * Migrate deprecated model names to their replacements
+ * This ensures existing users with old model selections are automatically updated
+ */
+function migrateDeprecatedModels(settings: ExtensionSettings): { settings: ExtensionSettings; wasMigrated: boolean } {
+  const migrated = { ...settings };
+  let wasMigrated = false;
+  
+  // Migrate deprecated OpenAI models
+  if (migrated.openaiModel === 'gpt-5') {
+    migrated.openaiModel = 'gpt-5.1';
+    console.log('📦 Migrated OpenAI model: gpt-5 → gpt-5.1');
+    wasMigrated = true;
+  }
+  
+  // Migrate deprecated Gemini models
+  if (migrated.geminiModel === 'gemini-2.5-flash') {
+    migrated.geminiModel = 'gemini-3-flash-preview';
+    console.log('📦 Migrated Gemini model: gemini-2.5-flash → gemini-3-flash-preview');
+    wasMigrated = true;
+  }
+  
+  return { settings: migrated, wasMigrated };
+}
+
 export class StorageManager {
   private static readonly SETTINGS_KEY = 'extension_settings';
   private static readonly CACHE_PREFIX = 'audit_cache_';
@@ -13,8 +38,8 @@ export class StorageManager {
         provider: 'openai', 
         openaiApiKey: '', 
         geminiApiKey: '', 
-        openaiModel: 'gpt-5', 
-        geminiModel: 'gemini-2.5-pro',
+        openaiModel: 'gpt-5.1', 
+        geminiModel: 'gemini-3-flash-preview',
         fullPageScreenshot: true
       };
 
@@ -35,14 +60,25 @@ export class StorageManager {
         safeLog.settings(decryptedSettings);
       }
 
-      // Validate decrypted settings
-      const validation = this.validateSettings(decryptedSettings);
+      // Migrate deprecated models to new versions
+      const { settings: migratedSettings, wasMigrated } = migrateDeprecatedModels(decryptedSettings);
+      
+      // If migration occurred, save the updated settings
+      if (wasMigrated) {
+        console.log('📦 Saving migrated model settings...');
+        this.saveSettings(migratedSettings).catch(err => 
+          console.warn('Failed to save migrated settings:', err)
+        );
+      }
+
+      // Validate migrated settings
+      const validation = this.validateSettings(migratedSettings);
       if (!validation.isValid) {
         console.warn('Settings validation failed:', validation.errors);
         // Don't throw error, just log warnings - allow user to fix in options
       }
 
-      return decryptedSettings;
+      return migratedSettings;
     } catch (error) {
       console.error('Failed to get settings:', error);
       console.log('Returning default settings due to error');
@@ -52,8 +88,8 @@ export class StorageManager {
         provider: 'openai',
         openaiApiKey: '',
         geminiApiKey: '',
-        openaiModel: 'gpt-5',
-        geminiModel: 'gemini-2.5-pro',
+        openaiModel: 'gpt-5.1',
+        geminiModel: 'gemini-3-flash-preview',
         fullPageScreenshot: true
       };
     }
