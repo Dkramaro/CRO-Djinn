@@ -478,3 +478,5 @@ Privacy Policy Claim	Code Reality	Status
 "No third-party data sharing"	✅ Zero analytics/tracking code	✅ MATCH
 "Data minimization"	✅ Only scrapes visible content	✅ MATCH
 
+
+

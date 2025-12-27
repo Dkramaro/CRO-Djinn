@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "CRO Djinn",
-  "version": "1.0.0",
-  "description": "AI-powered landing page analysis with user consent and privacy controls to maximize conversion rates",
+  "version": "1.0.1",
+  "description": "AI-powered landing page analysis to maximize conversion rates",
   "background": {
     "service_worker": "background.js",
     "type": "module"
@@ -34,7 +34,7 @@
     }
   },
   "options_page": "src/options/options.html",
-  "homepage_url": "https://cro-djinn.vercel.app/privacy",
+  "homepage_url": "https://cro-djinn.vercel.app",
   "web_accessible_resources": [{
     "resources": ["src/offscreen/offscreen.html", "icons/*"],
     "matches": []
