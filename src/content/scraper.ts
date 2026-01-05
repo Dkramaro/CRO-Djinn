@@ -1,9 +1,21 @@
 import { RawPageData } from '../types';
 
+// Cache for detected scroll container
+interface ScrollContainerCache {
+  element: Element | null;
+  isCustomContainer: boolean;
+  scrollHeight: number;
+}
+
 export class PageScraper {
+  private scrollContainerCache: ScrollContainerCache | null = null;
+
   async scrapePage(): Promise<RawPageData> {
     // Wait for page to be fully loaded
     await this.waitForPageReady();
+
+    // Detect scroll container once for consistent position calculations
+    this.scrollContainerCache = this.detectScrollContainer();
 
     const url = window.location.href;
     const title = document.title;
@@ -31,6 +43,148 @@ export class PageScraper {
       pageMetadata,
       timestamp: Date.now()
     };
+  }
+
+  /**
+   * Detect main scroll container for accurate position calculations
+   * Handles SPAs where body has overflow:hidden and a child element scrolls
+   */
+  private detectScrollContainer(): ScrollContainerCache {
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    // Check if window scrolling works normally
+    const html = document.documentElement;
+    const body = document.body;
+    const htmlStyle = window.getComputedStyle(html);
+    const bodyStyle = window.getComputedStyle(body);
+    
+    const htmlBlocked = htmlStyle.overflowY === 'hidden';
+    const bodyBlocked = bodyStyle.overflowY === 'hidden';
+    
+    const maxScrollHeight = Math.max(body.scrollHeight, html.scrollHeight);
+    const hasScrollableContent = maxScrollHeight > viewportHeight + 50;
+    
+    // If window scroll works, use it
+    if ((!htmlBlocked && !bodyBlocked && hasScrollableContent) ||
+        (!htmlBlocked && html.scrollHeight > html.clientHeight) ||
+        (!bodyBlocked && body.scrollHeight > body.clientHeight)) {
+      return {
+        element: null,
+        isCustomContainer: false,
+        scrollHeight: maxScrollHeight
+      };
+    }
+    
+    // Find custom scroll container
+    const potentialContainers = document.querySelectorAll(
+      'main, [role="main"], #root, #app, #__next, .app, .main, .content, ' +
+      '.page-wrapper, .page-content, .main-content, .scroll-container, ' +
+      'div[class*="container"], div[class*="wrapper"], div[class*="content"]'
+    );
+    const bodyChildren = Array.from(document.body.children);
+    const allElements = new Set([...potentialContainers, ...bodyChildren]);
+    
+    let bestCandidate: { element: Element; score: number; scrollHeight: number } | null = null;
+    
+    for (const element of allElements) {
+      if (!(element instanceof HTMLElement)) continue;
+      
+      const style = window.getComputedStyle(element);
+      if (style.overflowY !== 'auto' && style.overflowY !== 'scroll') continue;
+      
+      const scrollHeight = element.scrollHeight;
+      const clientHeight = element.clientHeight;
+      if (scrollHeight <= clientHeight || scrollHeight < 1000) continue;
+      
+      const rect = element.getBoundingClientRect();
+      const widthCoverage = rect.width / viewportWidth;
+      const heightCoverage = rect.height / viewportHeight;
+      if (widthCoverage < 0.5 || heightCoverage < 0.4) continue;
+      
+      // Skip if inside overlay
+      if (this.isInsideOverlay(element)) continue;
+      
+      // Score candidate
+      let score = 0;
+      score += Math.min(widthCoverage * 20, 20);
+      score += Math.min(heightCoverage * 10, 10);
+      
+      const scrollRatio = scrollHeight / clientHeight;
+      if (scrollRatio > 5) score += 25;
+      else if (scrollRatio > 3) score += 20;
+      else if (scrollRatio > 2) score += 15;
+      
+      if (scrollHeight > 5000) score += 15;
+      else if (scrollHeight > 3000) score += 12;
+      else if (scrollHeight > 2000) score += 8;
+      
+      // DOM depth - prefer shallow
+      let depth = 0;
+      let current: Element | null = element;
+      while (current && current !== document.body) { depth++; current = current.parentElement; }
+      if (depth <= 2) score += 15;
+      else if (depth <= 3) score += 12;
+      else if (depth <= 4) score += 8;
+      
+      // Main content markers
+      if (element.querySelector('h1') || element.querySelector('main, [role="main"]')) score += 15;
+      
+      if (!bestCandidate || score > bestCandidate.score) {
+        bestCandidate = { element, score, scrollHeight };
+      }
+    }
+    
+    if (bestCandidate && bestCandidate.score >= 50) {
+      return {
+        element: bestCandidate.element,
+        isCustomContainer: true,
+        scrollHeight: bestCandidate.scrollHeight
+      };
+    }
+    
+    return {
+      element: null,
+      isCustomContainer: false,
+      scrollHeight: maxScrollHeight
+    };
+  }
+
+  private isInsideOverlay(element: Element): boolean {
+    let current: Element | null = element;
+    while (current && current !== document.body) {
+      const role = current.getAttribute('role');
+      if (role === 'dialog' || role === 'alertdialog') return true;
+      
+      const className = (current.className || '').toString().toLowerCase();
+      const id = (current.id || '').toLowerCase();
+      const patterns = ['modal', 'overlay', 'popup', 'dialog', 'lightbox'];
+      for (const pattern of patterns) {
+        if (className.includes(pattern) || id.includes(pattern)) return true;
+      }
+      current = current.parentElement;
+    }
+    return false;
+  }
+
+  /**
+   * Get current scroll position accounting for custom scroll containers
+   */
+  private getScrollY(): number {
+    if (this.scrollContainerCache?.isCustomContainer && this.scrollContainerCache.element) {
+      return this.scrollContainerCache.element.scrollTop;
+    }
+    return window.scrollY;
+  }
+
+  /**
+   * Get total scroll height accounting for custom scroll containers
+   */
+  private getScrollHeight(): number {
+    if (this.scrollContainerCache?.isCustomContainer) {
+      return this.scrollContainerCache.scrollHeight;
+    }
+    return document.documentElement.scrollHeight;
   }
 
   private async waitForPageReady(): Promise<void> {
@@ -131,7 +285,7 @@ export class PageScraper {
       const text = heading.textContent?.trim();
       if (text && this.isVisible(heading)) {
         const rect = heading.getBoundingClientRect();
-        const topPosition = Math.round(rect.top + window.scrollY);
+        const topPosition = Math.round(rect.top + this.getScrollY());
         
         headings.push({
           tag: heading.tagName?.toLowerCase() || '',
@@ -196,7 +350,7 @@ export class PageScraper {
         href: (elem as HTMLAnchorElement).href || null,
         type: (elem as HTMLInputElement).type || null,
         position: {
-          top: Math.round(rect.top + window.scrollY),
+          top: Math.round(rect.top + this.getScrollY()),
           left: Math.round(rect.left + window.scrollX),
           width: Math.round(rect.width),
           height: Math.round(rect.height)
@@ -215,7 +369,7 @@ export class PageScraper {
           target: (elem as HTMLAnchorElement).target || null,
           ariaLabel: elem.getAttribute('aria-label')
         },
-        isAboveFold: rect.top + window.scrollY < window.innerHeight,
+        isAboveFold: rect.top + this.getScrollY() < window.innerHeight,
         index
       });
     });
@@ -493,12 +647,14 @@ export class PageScraper {
   }
 
   private getPageMetadata(): any {
+    const scrollHeight = this.getScrollHeight();
     const viewport = {
       width: window.innerWidth,
       height: window.innerHeight,
-      scrollHeight: document.documentElement.scrollHeight,
+      scrollHeight: scrollHeight,
       isMobile: window.innerWidth < 768,
-      hasVerticalScroll: document.documentElement.scrollHeight > window.innerHeight
+      hasVerticalScroll: scrollHeight > window.innerHeight,
+      hasCustomScrollContainer: this.scrollContainerCache?.isCustomContainer || false
     };
 
     // Get viewport meta tag

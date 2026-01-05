@@ -726,9 +726,9 @@ class PopupController {
         this.populateQuickWins(analysis.quickWins);
       }
       
-      if (analysis.visualCROAnalysis) {
-        this.populateVisualCROAnalysis(analysis.visualCROAnalysis);
-      }
+      // Always try to populate visual CRO, with fallback to empty object
+      console.log('[CRO Djinn] Has visualCROAnalysis:', !!analysis.visualCROAnalysis);
+      this.populateVisualCROAnalysis(analysis.visualCROAnalysis || {});
     } catch (error) {
       console.warn('Error populating analysis sections:', error);
     }
@@ -753,12 +753,17 @@ class PopupController {
   private updateStarRating(rating: 1 | 2 | 3): void {
     const starElements = document.querySelectorAll('.star');
     const scorePill = document.getElementById('score-pill');
-    
+
     if (!starElements.length || !scorePill) return;
+
+    // Defensive: ensure rating is a number between 1-3
+    let numRating = typeof rating === 'string' ? parseInt(rating, 10) : rating;
+    if (isNaN(numRating) || numRating < 1) numRating = 1;
+    if (numRating > 3) numRating = 3;
 
     starElements.forEach(star => star.classList.remove('active'));
 
-    for (let i = 0; i < rating; i++) {
+    for (let i = 0; i < numRating; i++) {
       const star = starElements[i];
       if (star) {
         star.classList.add('active');
@@ -766,9 +771,9 @@ class PopupController {
     }
 
     scorePill.className = 'score-pill';
-    if (rating === 3) {
+    if (numRating === 3) {
       scorePill.style.backgroundColor = '#34a853';
-    } else if (rating === 2) {
+    } else if (numRating === 2) {
       scorePill.style.backgroundColor = '#fbbc05';
     } else {
       scorePill.style.backgroundColor = '#ea4335';
@@ -781,13 +786,35 @@ class PopupController {
       if (!container) return;
 
       container.innerHTML = '';
+      
+      // Defensive: handle various input types
+      let itemsArray: string[] = [];
       if (Array.isArray(items)) {
-        items.forEach(item => {
-          const li = document.createElement('li');
-          li.textContent = item || '';
-          container.appendChild(li);
-        });
+        itemsArray = items;
+      } else if (typeof items === 'object' && items !== null) {
+        // Handle case where it might be an object with values
+        itemsArray = Object.values(items).filter(v => typeof v === 'string') as string[];
+      } else if (typeof items === 'string') {
+        // Handle single string
+        itemsArray = [items];
       }
+      
+      if (itemsArray.length === 0) {
+        const li = document.createElement('li');
+        li.textContent = 'No data available';
+        li.style.color = '#666';
+        li.style.fontStyle = 'italic';
+        container.appendChild(li);
+        return;
+      }
+      
+      itemsArray.forEach(item => {
+        if (item && typeof item === 'string' && item.trim()) {
+          const li = document.createElement('li');
+          li.textContent = item;
+          container.appendChild(li);
+        }
+      });
     } catch (error) {
       console.warn(`Error populating list for '${elementId}':`, error);
     }
@@ -840,7 +867,26 @@ class PopupController {
     container.innerHTML = '';
     cleanedSteps.forEach(step => {
       const listItem = document.createElement('li');
-      listItem.textContent = step;
+      
+      // Check if step has a header like "FIRST LOOK:" or "SCANNING:"
+      const headerMatch = step.match(/^([A-Z\s]+):\s*(.*)$/);
+      
+      if (headerMatch) {
+        // Create styled header span
+        const headerSpan = document.createElement('span');
+        headerSpan.className = 'journey-step-header';
+        headerSpan.textContent = headerMatch[1] + ': ';
+        
+        // Create content span
+        const contentSpan = document.createElement('span');
+        contentSpan.textContent = headerMatch[2];
+        
+        listItem.appendChild(headerSpan);
+        listItem.appendChild(contentSpan);
+      } else {
+        listItem.textContent = step;
+      }
+      
       container.appendChild(listItem);
     });
   }
@@ -951,9 +997,13 @@ class PopupController {
 
     section.classList.remove('hidden');
     
-    this.setTextContent('eye-flow-path', visualCRO.visualFlow?.eyeFlowPath || 'Analyzing...');
+    // Debug: log what we received
+    console.log('[CRO Djinn] Visual CRO Analysis data:', JSON.stringify(visualCRO, null, 2));
+
+    // Visual Flow
+    this.setTextContent('eye-flow-path', visualCRO.visualFlow?.eyeFlowPath || visualCRO.visualFlow?.eyeFlow || 'Analyzing...');
     this.setTextContent('flow-score', `${visualCRO.visualFlow?.flowScore || '-'}/10`);
-    
+
     const flowDistractionsContainer = document.getElementById('flow-distractions-container');
     const flowDistractionsList = document.getElementById('flow-distractions');
     if (flowDistractionsList && visualCRO.visualFlow?.distractions?.length > 0) {
@@ -963,14 +1013,19 @@ class PopupController {
       flowDistractionsContainer?.classList.add('hidden');
     }
 
+    // Color Contrast
     this.setTextContent('cta-contrast', visualCRO.colorContrast?.ctaContrast || 'Analyzing...');
     this.setTextContent('readability', visualCRO.colorContrast?.readability || 'Analyzing...');
     this.setTextContent('emotional-response', visualCRO.colorContrast?.emotionalResponse || 'Analyzing...');
     this.setTextContent('contrast-score', `${visualCRO.colorContrast?.contrastScore || '-'}/10`);
 
-    this.setTextContent('critical-problem', visualCRO.criticalIssue?.problem || 'Analyzing critical visual issues...');
-    this.setTextContent('critical-solution', visualCRO.criticalIssue?.solution || 'Generating solution...');
-    this.setTextContent('critical-impact', visualCRO.criticalIssue?.impact || 'Analyzing...');
+    // Critical Issue - handle various possible key names
+    const criticalIssue = visualCRO.criticalIssue || visualCRO.criticalVisualIssue || visualCRO.critical_issue || {};
+    console.log('[CRO Djinn] Critical Issue data:', JSON.stringify(criticalIssue, null, 2));
+    
+    this.setTextContent('critical-problem', criticalIssue.problem || criticalIssue.Problem || 'No critical visual issues detected');
+    this.setTextContent('critical-solution', criticalIssue.solution || criticalIssue.Solution || 'No solution needed');
+    this.setTextContent('critical-impact', criticalIssue.impact || criticalIssue.Impact || criticalIssue.expectedImpact || 'N/A');
   }
 
   private populateCopySuggestions(suggestions?: any[]): void {

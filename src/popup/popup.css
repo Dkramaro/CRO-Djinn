@@ -448,12 +448,20 @@ body {
   gap: 8px;
 }
 
-.impact-badge, .effort-badge, .conversion-impact-badge, .timeline-badge {
+.effort-badge, .conversion-impact-badge, .timeline-badge {
   font-size: 11px;
   padding: 2px 6px;
   border-radius: 12px;
   font-weight: 500;
   white-space: nowrap;
+}
+
+.impact-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 12px;
+  font-weight: 500;
+  /* Allow wrapping for impact badges - they can have long text */
 }
 
 .impact-badge {
@@ -615,6 +623,12 @@ body {
 
 .journey-steps li:last-child {
   border-left: none;
+}
+
+/* Journey step header styling (FIRST LOOK:, SCANNING:, etc.) */
+.journey-step-header {
+  font-weight: 600;
+  color: #2563eb;
 }
 
 /* Copy suggestions */
@@ -1069,20 +1083,21 @@ body {
   max-width: 100%;
 }
 
-.impact-badge {
+.critical-issue .impact-badge,
+#critical-impact {
   background: #fff3e0;
   color: #f57c00;
-  padding: 2px 8px;
-  border-radius: 12px;
+  padding: 4px 10px;
+  border-radius: 8px;
   font-size: 12px;
   font-weight: 500;
-  display: inline-block;
+  display: block;
+  white-space: normal !important;
   word-wrap: break-word;
   overflow-wrap: break-word;
-  max-width: calc(400px - 104px);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  word-break: break-word;
+  max-width: 100%;
+  line-height: 1.5;
 }
 
 .flow-distractions {
@@ -1119,7 +1134,19 @@ body {
   margin-bottom: 12px;
   width: 100%;
   max-width: 100%;
-  overflow: hidden;
+  overflow: visible;
+}
+
+.issue-impact span,
+.issue-impact .impact-badge,
+#critical-impact {
+  display: inline-block;
+  white-space: normal !important;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  max-width: 100%;
+  line-height: 1.4;
 }
 
 .issue-problem strong,

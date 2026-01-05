@@ -1,3 +1,5 @@
+import { detectMainScrollContainer, ScrollContainerInfo } from './scrollDetection';
+
 export interface ScreenshotCaptureOptions {
   fullPage?: boolean;
   maxScreenshots?: number;
@@ -66,12 +68,214 @@ export class ScreenshotCapture {
 
       console.log('Starting full page capture for tab:', tabId);
 
-      // Get accurate page dimensions with persistent header detection
+      // Get accurate page dimensions with persistent header detection AND custom scroll container detection
       const pageInfo = await chrome.scripting.executeScript({
         target: { tabId },
         func: () => {
-          // Reset scroll position to top first
-          window.scrollTo({ top: 0, behavior: 'instant' });
+          // ========== SCROLL CONTAINER DETECTION ==========
+          // Detects custom scroll containers (common in SPAs like tali.ai)
+          // where body has overflow:hidden and a child element handles scrolling
+          
+          const detectMainScrollContainer = () => {
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            
+            // Check if window scrolling works normally
+            const isWindowScrollable = () => {
+              const html = document.documentElement;
+              const body = document.body;
+              const htmlStyle = window.getComputedStyle(html);
+              const bodyStyle = window.getComputedStyle(body);
+              
+              const htmlOverflow = htmlStyle.overflowY;
+              const bodyOverflow = bodyStyle.overflowY;
+              const htmlBlocked = htmlOverflow === 'hidden';
+              const bodyBlocked = bodyOverflow === 'hidden';
+              
+              const maxScrollHeight = Math.max(body.scrollHeight, html.scrollHeight);
+              const hasScrollableContent = maxScrollHeight > viewportHeight + 50;
+              
+              if (!htmlBlocked && !bodyBlocked && hasScrollableContent) return true;
+              if (!htmlBlocked && html.scrollHeight > html.clientHeight) return true;
+              if (!bodyBlocked && body.scrollHeight > body.clientHeight) return true;
+              
+              return false;
+            };
+            
+            // Check if element is inside a modal/overlay
+            const isElementInsideOverlay = (element: Element): boolean => {
+              let current: Element | null = element;
+              while (current && current !== document.body) {
+                const role = current.getAttribute('role');
+                if (role === 'dialog' || role === 'alertdialog') return true;
+                
+                const className = (current.className || '').toString().toLowerCase();
+                const id = (current.id || '').toLowerCase();
+                const overlayPatterns = ['modal', 'overlay', 'popup', 'dialog', 'lightbox'];
+                for (const pattern of overlayPatterns) {
+                  if (className.includes(pattern) || id.includes(pattern)) return true;
+                }
+                
+                const style = window.getComputedStyle(current);
+                if (style.position === 'fixed' && current !== element) {
+                  const rect = current.getBoundingClientRect();
+                  if (rect.width < viewportWidth * 0.9 || rect.height < viewportHeight * 0.9) {
+                    return true;
+                  }
+                }
+                current = current.parentElement;
+              }
+              return false;
+            };
+            
+            // Get DOM depth from body
+            const getDomDepth = (element: Element): number => {
+              let depth = 0;
+              let current: Element | null = element;
+              while (current && current !== document.body) {
+                depth++;
+                current = current.parentElement;
+              }
+              return depth;
+            };
+            
+            // Check for main content markers
+            const hasMainContentMarkers = (element: Element): boolean => {
+              if (element.querySelector('h1')) return true;
+              if (element.querySelector('main, [role="main"]')) return true;
+              if (element.tagName.toLowerCase() === 'main') return true;
+              if (element.getAttribute('role') === 'main') return true;
+              const textLength = (element.textContent || '').trim().length;
+              if (textLength > 500) return true;
+              return false;
+            };
+            
+            if (isWindowScrollable()) {
+              return {
+                element: null,
+                isCustomContainer: false,
+                scrollHeight: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight),
+                scrollTop: window.pageYOffset || document.documentElement.scrollTop,
+                clientHeight: viewportHeight,
+                reason: 'Window scroll is functional'
+              };
+            }
+            
+            // Find scroll container candidates
+            const potentialContainers = document.querySelectorAll(
+              'main, [role="main"], #root, #app, #__next, .app, .main, .content, ' +
+              '.page-wrapper, .page-content, .main-content, .scroll-container, ' +
+              'div[class*="container"], div[class*="wrapper"], div[class*="content"]'
+            );
+            const bodyChildren = Array.from(document.body.children);
+            const allElements = new Set([...potentialContainers, ...bodyChildren]);
+            
+            interface Candidate {
+              element: Element;
+              score: number;
+              scrollHeight: number;
+              clientHeight: number;
+              rect: DOMRect;
+              domDepth: number;
+              containsMainContent: boolean;
+            }
+            
+            const candidates: Candidate[] = [];
+            
+            for (const element of allElements) {
+              if (!(element instanceof HTMLElement)) continue;
+              
+              const style = window.getComputedStyle(element);
+              const overflowY = style.overflowY;
+              if (overflowY !== 'auto' && overflowY !== 'scroll') continue;
+              
+              const scrollHeight = element.scrollHeight;
+              const clientHeight = element.clientHeight;
+              if (scrollHeight <= clientHeight) continue;
+              if (scrollHeight < 1000) continue;
+              
+              const rect = element.getBoundingClientRect();
+              const widthCoverage = rect.width / viewportWidth;
+              const heightCoverage = rect.height / viewportHeight;
+              if (widthCoverage < 0.5 || heightCoverage < 0.4) continue;
+              
+              if (isElementInsideOverlay(element)) continue;
+              
+              const domDepth = getDomDepth(element);
+              const containsMainContent = hasMainContentMarkers(element);
+              
+              // Score the candidate
+              let score = 0;
+              score += Math.min(widthCoverage * 20, 20);
+              score += Math.min(heightCoverage * 10, 10);
+              
+              const scrollRatio = scrollHeight / clientHeight;
+              if (scrollRatio > 5) score += 25;
+              else if (scrollRatio > 3) score += 20;
+              else if (scrollRatio > 2) score += 15;
+              else if (scrollRatio > 1.5) score += 10;
+              
+              if (scrollHeight > 5000) score += 15;
+              else if (scrollHeight > 3000) score += 12;
+              else if (scrollHeight > 2000) score += 8;
+              else if (scrollHeight > 1000) score += 5;
+              
+              if (domDepth <= 2) score += 15;
+              else if (domDepth <= 3) score += 12;
+              else if (domDepth <= 4) score += 8;
+              else if (domDepth <= 5) score += 5;
+              
+              if (containsMainContent) score += 15;
+              
+              candidates.push({ element, score, scrollHeight, clientHeight, rect, domDepth, containsMainContent });
+            }
+            
+            if (candidates.length === 0) {
+              return {
+                element: null,
+                isCustomContainer: false,
+                scrollHeight: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight),
+                scrollTop: window.pageYOffset || document.documentElement.scrollTop,
+                clientHeight: viewportHeight,
+                reason: 'No valid scroll container candidates found'
+              };
+            }
+            
+            candidates.sort((a, b) => b.score - a.score);
+            const best = candidates[0];
+            
+            if (best.score < 50) {
+              return {
+                element: null,
+                isCustomContainer: false,
+                scrollHeight: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight),
+                scrollTop: window.pageYOffset || document.documentElement.scrollTop,
+                clientHeight: viewportHeight,
+                reason: `Best candidate score (${best.score}) below threshold`
+              };
+            }
+            
+            return {
+              element: best.element,
+              isCustomContainer: true,
+              scrollHeight: best.scrollHeight,
+              scrollTop: best.element.scrollTop,
+              clientHeight: best.clientHeight,
+              reason: `Found custom scroll container with score ${best.score}`
+            };
+          };
+          
+          // Detect scroll container first
+          const scrollContainerInfo = detectMainScrollContainer();
+          console.log('🔍 Scroll container detection:', scrollContainerInfo.reason, 
+            scrollContainerInfo.isCustomContainer ? '(using custom container)' : '(using window)');
+          
+          // Reset scroll position to top (using detected container)
+          if (scrollContainerInfo.isCustomContainer && scrollContainerInfo.element) {
+            (scrollContainerInfo.element as HTMLElement).scrollTo({ top: 0, behavior: 'instant' });
+          } else {
+            window.scrollTo({ top: 0, behavior: 'instant' });
+          }
           
           // Get viewport height
           const vh = window.innerHeight;
@@ -146,35 +350,35 @@ export class ScreenshotCapture {
             vh * 0.7 // Ensure we don't go below 70% of viewport
           );
           
-          // Get total page height using multiple methods for accuracy
-          const bodyScrollHeight = document.body.scrollHeight || 0;
-          const bodyOffsetHeight = document.body.offsetHeight || 0;
-          const docClientHeight = document.documentElement.clientHeight || 0;
-          const docScrollHeight = document.documentElement.scrollHeight || 0;
-          const docOffsetHeight = document.documentElement.offsetHeight || 0;
-          
-          const th = Math.max(
-            bodyScrollHeight,
-            bodyOffsetHeight,
-            docScrollHeight,
-            docOffsetHeight,
-            // Also check the computed height of all elements
-            Array.from(document.body.children).reduce((maxHeight, elem) => {
-              const rect = elem.getBoundingClientRect();
-              return Math.max(maxHeight, rect.bottom + window.pageYOffset);
-            }, 0)
-          );
+          // Get total page height - use custom container if detected, otherwise standard methods
+          let th: number;
+          if (scrollContainerInfo.isCustomContainer) {
+            th = scrollContainerInfo.scrollHeight;
+          } else {
+            const bodyScrollHeight = document.body.scrollHeight || 0;
+            const bodyOffsetHeight = document.body.offsetHeight || 0;
+            const docScrollHeight = document.documentElement.scrollHeight || 0;
+            const docOffsetHeight = document.documentElement.offsetHeight || 0;
+            
+            th = Math.max(
+              bodyScrollHeight,
+              bodyOffsetHeight,
+              docScrollHeight,
+              docOffsetHeight,
+              Array.from(document.body.children).reduce((maxHeight, elem) => {
+                const rect = elem.getBoundingClientRect();
+                return Math.max(maxHeight, rect.bottom + window.pageYOffset);
+              }, 0)
+            );
+          }
 
           console.log('Page dimension analysis with header detection:', {
             viewport: vh,
             headerHeight: headerInfo.totalHeaderHeight,
             usableViewport: usableViewportHeight,
             headerElements: headerInfo.headerElements,
-            detectedHeaders: headerInfo.detectedHeaders,
-            bodyScrollHeight,
-            bodyOffsetHeight,
-            docScrollHeight,
-            docOffsetHeight,
+            customScrollContainer: scrollContainerInfo.isCustomContainer,
+            scrollContainerReason: scrollContainerInfo.reason,
             finalHeight: th
           });
 
@@ -183,12 +387,19 @@ export class ScreenshotCapture {
           document.documentElement.style.scrollBehavior = 'auto';
           document.body.style.scrollBehavior = 'auto';
 
+          // Store a reference marker for the custom scroll container if found
+          // We'll use a data attribute to find it again in subsequent script executions
+          if (scrollContainerInfo.isCustomContainer && scrollContainerInfo.element) {
+            (scrollContainerInfo.element as HTMLElement).setAttribute('data-cro-scroll-container', 'true');
+          }
+
           return {
             viewportHeight: vh,
             usableViewportHeight: usableViewportHeight,
             totalHeight: th,
             headerInfo: headerInfo,
-            originalBehavior: originalBehavior
+            originalBehavior: originalBehavior,
+            hasCustomScrollContainer: scrollContainerInfo.isCustomContainer
           };
         }
       });
@@ -197,7 +408,7 @@ export class ScreenshotCapture {
         throw new Error('Cannot get page dimensions');
       }
 
-      const { viewportHeight, usableViewportHeight, totalHeight, headerInfo } = pageInfo[0].result;
+      const { viewportHeight, usableViewportHeight, totalHeight, headerInfo, hasCustomScrollContainer } = pageInfo[0].result;
       
       console.log('Page info with header detection:', { 
         viewportHeight, 
@@ -221,12 +432,20 @@ export class ScreenshotCapture {
       let totalSize = 0;
       let anyCompressed = false;
 
-      // Scroll to top first
+      // Scroll to top first (using custom container if detected)
       await chrome.scripting.executeScript({
         target: { tabId },
-        func: () => {
+        func: (useCustomContainer) => {
+          if (useCustomContainer) {
+            const container = document.querySelector('[data-cro-scroll-container="true"]');
+            if (container) {
+              (container as HTMLElement).scrollTo({ top: 0, behavior: 'instant' });
+              return;
+            }
+          }
           window.scrollTo({ top: 0, behavior: 'instant' });
-        }
+        },
+        args: [hasCustomScrollContainer]
       });
 
       await this.delay(Math.min(scrollDelay, 150)); // Cap initial delay at 150ms for faster start
@@ -253,21 +472,36 @@ export class ScreenshotCapture {
 
         console.log(`Positioning for screenshot ${i + 1}: scrollTop=${scrollTop}, effectiveViewportHeight=${effectiveViewportHeight}`);
 
-        // Scroll to precise position and verify
+        // Scroll to precise position and verify (using custom container if detected)
         const scrollResult = await chrome.scripting.executeScript({
           target: { tabId },
-          func: (targetScrollY, expectedViewportHeight) => {
-            // Set scroll position
-            window.scrollTo({ top: targetScrollY, behavior: 'instant' });
+          func: (targetScrollY, expectedViewportHeight, useCustomContainer) => {
+            let actualScrollTop: number;
             
-            // Force reflow to ensure positioning is complete
-            document.documentElement.offsetHeight;
+            // Use custom scroll container if detected
+            if (useCustomContainer) {
+              const container = document.querySelector('[data-cro-scroll-container="true"]') as HTMLElement;
+              if (container) {
+                container.scrollTo({ top: targetScrollY, behavior: 'instant' });
+                // Force reflow
+                container.offsetHeight;
+                actualScrollTop = container.scrollTop;
+              } else {
+                // Fallback to window
+                window.scrollTo({ top: targetScrollY, behavior: 'instant' });
+                document.documentElement.offsetHeight;
+                actualScrollTop = window.pageYOffset || document.documentElement.scrollTop;
+              }
+            } else {
+              // Standard window scroll
+              window.scrollTo({ top: targetScrollY, behavior: 'instant' });
+              document.documentElement.offsetHeight;
+              actualScrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            }
             
-            // Verify position
-            const actualScrollTop = window.pageYOffset || document.documentElement.scrollTop;
             const actualViewportHeight = window.innerHeight;
             
-            console.log(`Scroll verification: requested=${targetScrollY}, actual=${actualScrollTop}, viewport=${actualViewportHeight}`);
+            console.log(`Scroll verification: requested=${targetScrollY}, actual=${actualScrollTop}, viewport=${actualViewportHeight}, customContainer=${useCustomContainer}`);
             
             return {
               requestedScrollTop: targetScrollY,
@@ -276,7 +510,7 @@ export class ScreenshotCapture {
               success: Math.abs(actualScrollTop - targetScrollY) < 10 // Allow 10px tolerance
             };
           },
-          args: [scrollTop, effectiveViewportHeight]
+          args: [scrollTop, effectiveViewportHeight, hasCustomScrollContainer]
         });
 
         const scrollVerification = scrollResult?.[0]?.result;
@@ -348,12 +582,22 @@ export class ScreenshotCapture {
         }
       }
 
-      // Reset scroll to top
+      // Reset scroll to top and clean up
       await chrome.scripting.executeScript({
         target: { tabId },
-        func: () => {
+        func: (useCustomContainer) => {
+          if (useCustomContainer) {
+            const container = document.querySelector('[data-cro-scroll-container="true"]');
+            if (container) {
+              (container as HTMLElement).scrollTo({ top: 0, behavior: 'instant' });
+              // Clean up the marker attribute
+              container.removeAttribute('data-cro-scroll-container');
+              return;
+            }
+          }
           window.scrollTo({ top: 0, behavior: 'instant' });
-        }
+        },
+        args: [hasCustomScrollContainer]
       });
 
       // Restore original scroll behavior

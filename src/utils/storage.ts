@@ -323,22 +323,24 @@ export class StorageManager {
  */
 export function cleanCustomerJourneySteps(steps: string[]): string[] {
   if (!steps || !Array.isArray(steps)) {
-    return steps;
+    return [];
   }
 
-  return steps.map(step => {
-    if (typeof step !== 'string') {
-      return step;
-    }
-
-    // Remove leading numbered patterns: "1.", "1)", "1-", "1 ", "Step 1:", etc.
-    // This regex matches:
-    // - Optional "Step" followed by space
-    // - One or more digits
-    // - Optional dot, parenthesis, dash, colon, or space
-    // - Optional space after the delimiter
-    const cleanedStep = step.replace(/^(?:Step\s+)?\d+[\.\)\-\:\s]*\s*/i, '').trim();
-    
-    return cleanedStep || step; // Fallback to original if cleaning results in empty string
-  });
+  return steps
+    .filter(step => step != null) // Remove null/undefined entries
+    .map(step => {
+      // Convert non-strings to strings
+      const stepStr = typeof step === 'string' ? step : String(step);
+      
+      // Remove leading numbered patterns: "1.", "1)", "1-", "1 ", "Step 1:", etc.
+      // This regex matches:
+      // - Optional "Step" followed by space
+      // - One or more digits
+      // - Optional dot, parenthesis, dash, colon, or space
+      // - Optional space after the delimiter
+      const cleanedStep = stepStr.replace(/^(?:Step\s+)?\d+[\.\)\-\:\s]*\s*/i, '').trim();
+      
+      return cleanedStep || stepStr; // Fallback to original if cleaning results in empty string
+    })
+    .filter(step => step.length > 0); // Remove empty strings
 }

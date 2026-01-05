@@ -136,28 +136,36 @@ export class PDFExporter {
     // Page metadata with beautiful design
     this.addPageMetadata(rawData, analysis.starRating, timestamp);
     
-    // Core content sections with sophisticated styling
+    // Core content sections in new order:
+    // 1. Page Overview (includes Industry Context and Customer Journey)
     if (analysis.pageSummary) {
       this.addPageOverviewSection(analysis.pageSummary);
+    }
+    
+    // 2. Executive Summary (TL;DR - moved up for executives)
+    this.addExecutiveSummarySection(analysis.executiveSummary || []);
+    
+    // 3. Current State (Strengths & Weaknesses)
+    if (analysis.pageSummary) {
       this.addStrengthsWeaknessesSection(analysis.pageSummary);
     }
     
-    this.addExecutiveSummarySection(analysis.executiveSummary || []);
-    
+    // 4. Priority Recommendations
     if (analysis.recommendations && analysis.recommendations.length > 0) {
       this.addRecommendationsSection(analysis.recommendations);
     }
     
-    // Quick Wins section
+    // 5. Quick Wins
     if (analysis.quickWins && analysis.quickWins.length > 0) {
       this.addQuickWinsSection(analysis.quickWins);
     }
     
-    // Visual CRO Analysis section
+    // 6. Visual CRO Analysis (moved down)
     if (analysis.visualCROAnalysis) {
       this.addVisualCROAnalysisSection(analysis.visualCROAnalysis);
     }
     
+    // 7. Copy Suggestions
     if (analysis.copySuggestions && analysis.copySuggestions.length > 0) {
       this.addCopySuggestionsSection(analysis.copySuggestions);
     }
@@ -370,37 +378,118 @@ export class PDFExporter {
     
     // Customer Journey section
     if (pageSummary.currentUserJourney && pageSummary.currentUserJourney.length > 0) {
-      this.yPosition += 5;
-      this.addSubsectionHeader('Customer Journey');
-      this.yPosition += 8;
+      // Clean duplicate numbering from customer journey steps first
+      const cleanedJourneySteps = cleanCustomerJourneySteps(pageSummary.currentUserJourney);
+      const maxWidth = this.pageWidth - (2 * this.margin) - 10; // Account for numbering
       
+      // Calculate the total height needed for the Customer Journey section
+      let customerJourneyHeight = 5 + 8; // Initial spacing + header spacing
+      customerJourneyHeight += 6; // Subsection header height
+      
+      // Set font for accurate measurement
+      this.doc.setFont('helvetica', 'normal');
+      this.doc.setFontSize(10);
+      this.doc.setCharSpace(0);
+      
+      cleanedJourneySteps.forEach((step: string) => {
+        // Ensure step is a string before processing
+        const stepStr = typeof step === 'string' ? step : String(step || '');
+        if (!stepStr) return;
+        
+        const stepLines = this.wrapText(stepStr, maxWidth);
+        // Each step: lines * line height + increased spacing after step (was 6, now 10)
+        customerJourneyHeight += (stepLines.length * 5) + 10;
+      });
+      
+      // Check if Customer Journey fits on current page
+      const bottomMargin = this.margin + 25;
+      const availableSpace = this.pageHeight - bottomMargin - this.yPosition;
+      
+      if (customerJourneyHeight > availableSpace) {
+        // Won't fit on page 1 - create new page exclusively for Customer Journey
+        this.addNewPage();
+        
+        // Add a professional section header matching other sections (primary fill, white text)
+        this.doc.setFillColor(...this.colors.primary);
+        this.doc.roundedRect(this.margin - 8, this.yPosition - 10, this.pageWidth - (2 * this.margin) + 16, 20, 5, 5, 'F');
+        
+        this.doc.setTextColor(255, 255, 255);
+        this.doc.setFont('helvetica', 'bold');
+        this.doc.setFontSize(14);
+        this.doc.text('Customer Journey', this.margin, this.yPosition);
+        
+        this.yPosition += 20;
+      } else {
+        // Fits on page 1 - just add normal spacing and subsection header
+        this.yPosition += 5;
+        this.addSubsectionHeader('Customer Journey');
+        this.yPosition += 8;
+      }
+      
+      // Render the Customer Journey steps
       this.doc.setTextColor(...this.colors.text);
       this.doc.setFont('helvetica', 'normal');
       this.doc.setFontSize(10);
       
-      // Clean duplicate numbering from customer journey steps
-      const cleanedJourneySteps = cleanCustomerJourneySteps(pageSummary.currentUserJourney);
-      
-      const maxWidth = this.pageWidth - (2 * this.margin) - 10; // Account for numbering
       cleanedJourneySteps.forEach((step: string, index: number) => {
+        // Ensure step is a string before processing
+        const stepStr = typeof step === 'string' ? step : String(step || '');
+        if (!stepStr) return;
+        
         // Add step number
         this.doc.setTextColor(...this.colors.accent);
         this.doc.setFont('helvetica', 'bold');
         this.doc.text(`${index + 1}.`, this.margin, this.yPosition);
         
-        // Add step text
-        this.doc.setTextColor(...this.colors.text);
-        this.doc.setFont('helvetica', 'normal');
+        // Check if step has a header like "FIRST LOOK:" or "SCANNING:"
+        const headerMatch = stepStr.match(/^([A-Z\s]+):\s*(.*)$/);
         
-        const stepLines = this.wrapText(step, maxWidth);
-        stepLines.forEach((line, lineIndex) => {
-          const xPosition = lineIndex === 0 ? this.margin + 10 : this.margin + 10;
-          this.doc.text(line, xPosition, this.yPosition);
-          if (lineIndex < stepLines.length - 1) {
-            this.yPosition += 5;
+        if (headerMatch) {
+          // Render header in bold blue
+          const header = headerMatch[1] + ':';
+          const content = headerMatch[2];
+          
+          this.doc.setTextColor(...this.colors.accent);
+          this.doc.setFont('helvetica', 'bold');
+          this.doc.setFontSize(10);
+          this.doc.text(header, this.margin + 10, this.yPosition);
+          
+          const headerWidth = this.doc.getTextWidth(header);
+          
+          // Render content in normal text color
+          this.doc.setTextColor(...this.colors.text);
+          this.doc.setFont('helvetica', 'normal');
+          
+          // Wrap the content after the header
+          const contentMaxWidth = maxWidth - headerWidth - 2;
+          const contentLines = this.wrapText(content, contentMaxWidth);
+          
+          // First line continues after header
+          if (contentLines[0]) {
+            this.doc.text(contentLines[0], this.margin + 10 + headerWidth + 2, this.yPosition);
           }
-        });
-        this.yPosition += 6;
+          
+          // Remaining lines wrap below
+          for (let i = 1; i < contentLines.length; i++) {
+            this.yPosition += 5;
+            this.doc.text(contentLines[i], this.margin + 10, this.yPosition);
+          }
+        } else {
+          // No header - render as normal text
+          this.doc.setTextColor(...this.colors.text);
+          this.doc.setFont('helvetica', 'normal');
+          
+          const stepLines = this.wrapText(stepStr, maxWidth);
+          stepLines.forEach((line, lineIndex) => {
+            const xPosition = this.margin + 10;
+            this.doc.text(line, xPosition, this.yPosition);
+            if (lineIndex < stepLines.length - 1) {
+              this.yPosition += 5;
+            }
+          });
+        }
+        
+        this.yPosition += 10; // Increased spacing between steps (was 6)
       });
     }
   }
@@ -436,12 +525,12 @@ export class PDFExporter {
   }
 
   private addStrengthsWeaknessesSection(pageSummary: any): void {
-    // Start a new page for Strengths & Weaknesses
+    // Start a new page for Current State
     this.addNewPage();
-    
+
     // Modern header with gradient-like effect (matching other sections)
     this.yPosition += 2;
-    this.addSectionHeaderProfessional('Strengths & Weaknesses Analysis');
+    this.addSectionHeaderProfessional('Current State');
     
     if (!pageSummary.keyStrengths && !pageSummary.criticalWeaknesses) {
       this.doc.setTextColor(...this.colors.text);
@@ -709,7 +798,7 @@ export class PDFExporter {
             this.doc.setFontSize(CONTENT_FONT_SIZE);
             this.doc.setCharSpace(0);
             this.doc.setTextColor(51, 51, 51); // Black color
-            this.doc.text(content, this.margin + 6 + labelWidth, textY);
+            this.doc.text(content, this.margin + 6 + labelWidth + 2, textY); // +2mm spacing after colon (matches Customer Journey)
           }
         } else {
           // Regular line without label - draw in black
@@ -1383,7 +1472,7 @@ export class PDFExporter {
     
     // Define allowed fields for each card type
     const allowedFields: { [key: string]: string[] } = {
-      'visual flow analysis': ['eyeflowpath', 'eyeflow'],
+      'visual flow analysis': ['eyeflowpath', 'eyeflow', 'eyeflowpattern'],
       'color & contrast evaluation': ['ctacontrast', 'readability', 'emotionalresponse'],
       'critical visual issue': ['problem', 'solution', 'impact']
     };
@@ -1455,7 +1544,7 @@ export class PDFExporter {
       this.yPosition += LABEL_LINE_HEIGHT;
       
       // Render content with correct font metrics
-      if (keyLower === 'eyeflowpath' || keyLower === 'eyeflow') {
+      if (keyLower === 'eyeflowpath' || keyLower === 'eyeflow' || keyLower === 'eyeflowpattern') {
         const formattedFlow = cleanValue.replace(/\s*->\s*/g, ' -> ');
         
         // Set font for accurate measurement
@@ -1534,12 +1623,13 @@ export class PDFExporter {
       this.yPosition += LABEL_LINE_HEIGHT;
       
       // Content with exact metrics
-      this.doc.setTextColor(keyLower === 'eyeflowpath' || keyLower === 'eyeflow' ? 40 : 51, keyLower === 'eyeflowpath' || keyLower === 'eyeflow' ? 40 : 51, keyLower === 'eyeflowpath' || keyLower === 'eyeflow' ? 40 : 51);
+      const isEyeFlow = keyLower === 'eyeflowpath' || keyLower === 'eyeflow' || keyLower === 'eyeflowpattern';
+      this.doc.setTextColor(isEyeFlow ? 40 : 51, isEyeFlow ? 40 : 51, isEyeFlow ? 40 : 51);
       this.doc.setFont('helvetica', 'normal');
       this.doc.setFontSize(CONTENT_FONT_SIZE);
       this.doc.setCharSpace(0);
       
-      if (keyLower === 'eyeflowpath' || keyLower === 'eyeflow') {
+      if (isEyeFlow) {
         const formattedFlow = cleanValue.replace(/\s*->\s*/g, ' -> ');
         const flowLines = this.wrapText(formattedFlow, safeTextWidth - 8);
         flowLines.forEach((line) => {
@@ -1663,10 +1753,13 @@ export class PDFExporter {
   }
 
   private wrapText(text: string, maxWidth: number): string[] {
-    if (!text || text.trim() === '') return [''];
+    // Defensive: ensure text is a string
+    if (text == null) return [''];
+    const textStr = typeof text === 'string' ? text : String(text);
+    if (!textStr || textStr.trim() === '') return [''];
     
     // Sanitize text to prevent PDF rendering issues
-    const sanitizedText = this.sanitizeTextForPDF(text);
+    const sanitizedText = this.sanitizeTextForPDF(textStr);
     
     // Ensure maxWidth is reasonable to prevent layout issues
     const safeMaxWidth = Math.max(maxWidth, 50);
@@ -1703,10 +1796,13 @@ export class PDFExporter {
   }
 
   private sanitizeTextForPDF(text: string): string {
-    if (!text) return '';
+    if (text == null) return '';
+    // Defensive: ensure text is a string
+    const textStr = typeof text === 'string' ? text : String(text);
+    if (!textStr) return '';
     
     // AGGRESSIVE cleaning to prevent ANY spacing issues
-    let cleanText = text
+    let cleanText = textStr
       // Remove or replace problematic characters that might cause rendering issues
       .replace(/[\u200B-\u200F\u2028-\u202F\u205F-\u206F]/g, '') // Remove zero-width and formatting characters
       .replace(/[\u0000-\u001F]/g, '') // Remove control characters
